@@ -50,8 +50,29 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         """Client message"""
         data = json.loads(text_data)
-        message_content = data.get('message', '').strip()
+        event_type = data.get('type')
 
+        if event_type == 'typing':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'user_typing',
+                    'username': self.user.username,
+                }
+            )
+            return
+
+        if event_type == 'stop_typing':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'user_stop_typing',
+                    'username': self.user.username,
+                }
+            )
+            return
+
+        message_content = data.get('message', '').strip()
         if not message_content:
             return
 
@@ -78,6 +99,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'username': event['username'],
             'timestamp': event['timestamp'],
             'message_id': event['message_id'],
+        }))
+
+    async def user_typing(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'typing',
+            'username': event['username'],
+        }))
+
+    async def user_stop_typing(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'stop_typing',
+            'username': event['username'],
         }))
 
     async def user_join(self, event):

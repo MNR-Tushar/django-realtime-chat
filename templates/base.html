@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Django Chat{% endblock %}</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-brand">💬 Django Chat</div>
+  <div class="nav-links">
+    {% if user.is_authenticated %}
+      <span class="nav-user">👤 {{ user.username }}</span>
+      <a href="{% url 'logout' %}" class="btn btn-sm">Logout</a>
+    {% else %}
+      <a href="{% url 'login' %}" class="btn btn-sm">Login</a>
+      <a href="{% url 'register' %}" class="btn btn-sm btn-primary">Register</a>
+    {% endif %}
+  </div>
+</nav>
+
+<main class="main-content">
+  {% block content %}{% endblock %}
+</main>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

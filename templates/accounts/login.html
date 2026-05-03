@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card">
+    <h2>Login করো</h2>
+    <form method="POST">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="form-group">
+          <label>{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}
+            <span class="error">{{ field.errors.0 }}</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary w-full">Login</button>
+    </form>
+    <p class="auth-link">Account নেই? <a href="{% url 'register' %}">Register করো</a></p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Chat Rooms{% endblock %}
+
+{% block content %}
+<div class="rooms-container">
+  <h1>Chat Rooms</h1>
+  <div class="rooms-grid">
+    {% for room in rooms %}
+      <a href="{% url 'chat:room' room.slug %}" class="room-card">
+        <div class="room-icon">💬</div>
+        <div class="room-info">
+          <h3>{{ room.name }}</h3>
+          <p>{{ room.description|default:"Chat করো..." }}</p>
+        </div>
+      </a>
+    {% empty %}
+      <p>কোনো room নেই। Admin panel থেকে room তৈরি করো।</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

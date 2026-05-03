@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ room.name }}{% endblock %}
+
+{% block content %}
+<div class="chat-layout">
+
+  <!-- Chat Header -->
+  <div class="chat-header">
+    <a href="{% url 'chat:index' %}" class="back-btn">← Back</a>
+    <div class="chat-header-info">
+      <h2># {{ room.name }}</h2>
+      <span id="connectionStatus" class="status connecting">Connecting...</span>
+    </div>
+  </div>
+
+  <!-- Messages Area -->
+  <div class="chat-messages" id="chatMessages">
+    {% for message in messages %}
+      <div class="message {% if message.author == request.user %}own{% endif %}"
+           data-id="{{ message.id }}">
+        <div class="message-author">{{ message.author.username }}</div>
+        <div class="message-bubble">{{ message.content }}</div>
+        <div class="message-time">{{ message.timestamp|date:"H:i" }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Typing Indicator -->
+  <div class="typing-indicator" id="typingIndicator"></div>
+
+  <!-- Input Area -->
+  <div class="chat-input-area">
+    <input
+      type="text"
+      id="messageInput"
+      placeholder="Message লিখো..."
+      autocomplete="off"
+      maxlength="1000"
+    />
+    <button id="sendBtn" class="btn btn-primary">Send</button>
+  </div>
+
+</div>
+
+
+<script>
+  const ROOM_SLUG = "{{ room.slug }}";
+  const CURRENT_USER = "{{ request.user.username }}";
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/chat.js' %}"></script>
+{% endblock %}
