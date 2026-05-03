@@ -152,8 +152,8 @@
         <h3># {{ featured.name }}</h3>
         <p>{{ featured.description|default:"The main hub — say hello, share updates, and keep everyone in the loop." }}</p>
         <div class="featured-meta">
-          <span class="meta-item">● 3 online</span>
-          <span class="meta-item">· 42 messages today</span>
+          <span class="meta-item">● {{ online_count|default:"0" }} online</span>
+          <span class="meta-item">· {{ messages_today|default:"0" }} messages today</span>
         </div>
       </div>
     </a>
