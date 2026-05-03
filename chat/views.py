@@ -1,14 +1,28 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django.utils import timezone
+from django.contrib.auth import get_user_model
 from .models import Room, Message
 
 
 @login_required
 def index(request):
     """Chat room list page"""
+    User = get_user_model()
     rooms = Room.objects.all()
-    return render(request, 'chat/index.html', {'rooms': rooms})
+    online_count = User.objects.filter(is_online=True).count()
+    messages_today = Message.objects.filter(timestamp__date=timezone.now().date()).count()
+    total_users = User.objects.count()
+    all_users = User.objects.all()
+
+    return render(request, 'chat/index.html', {
+        'rooms': rooms,
+        'online_count': online_count,
+        'messages_today': messages_today,
+        'total_users': total_users,
+        'all_users': all_users,
+    })
 
 
 @login_required

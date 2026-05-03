@@ -1,40 +1,28 @@
 {% extends 'base.html' %}
-{% block title %}Sign in — Nexus{% endblock %}
+{% block title %}Login — NexaChat{% endblock %}
 
 {% block content %}
-<div class="auth-wrapper">
+<div class="auth-container">
   <div class="auth-card">
-
     <div class="auth-logo">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      Nexus
+      <div class="auth-logo-icon">💬</div>
+      <h2>NexaChat</h2>
     </div>
-
-    <h2>Welcome back</h2>
-    <p class="auth-subtitle">Sign in to continue your conversations.</p>
-
-    <form method="POST" novalidate>
+    <p class="auth-subtitle">Sign in to your account</p>
+    <form method="POST">
       {% csrf_token %}
       {% for field in form %}
         <div class="form-group">
-          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          <label>{{ field.label }}</label>
           {{ field }}
           {% if field.errors %}
-            <span class="error-msg">{{ field.errors.0 }}</span>
+            <span class="error">{{ field.errors.0 }}</span>
           {% endif %}
         </div>
       {% endfor %}
-
-      <div style="margin-top: 20px;">
-        <button type="submit" class="btn btn-primary w-full btn-lg">Sign in</button>
-      </div>
+      <button type="submit" class="btn btn-primary w-full" style="margin-top:8px;">Login →</button>
     </form>
-
-    <p class="auth-footer">
-      Don't have an account? <a href="{% url 'register' %}">Create one</a>
-    </p>
+    <p class="auth-link">No account? <a href="{% url 'register' %}">Register</a></p>
   </div>
 </div>
 {% endblock %}

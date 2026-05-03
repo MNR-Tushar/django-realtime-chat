@@ -1,29 +1,311 @@
-// ── Elements ──────────────────────────────
+/* ═══════════════════════════════════════════════
+   TELEGRAM-STYLE CHAT.JS
+   Features: Emoji picker, Reactions, Sound,
+             Dark/Light mode, User sidebar,
+             Auto-resize textarea
+═══════════════════════════════════════════════ */
+
+// ── DOM Elements ──────────────────────────────
 const chatMessages   = document.getElementById('chatMessages');
 const messageInput   = document.getElementById('messageInput');
 const sendBtn        = document.getElementById('sendBtn');
 const statusEl       = document.getElementById('connectionStatus');
 const typingEl       = document.getElementById('typingIndicator');
-const typingName     = document.getElementById('typingName');
 const toastContainer = document.getElementById('toastContainer');
 const attachBtn      = document.getElementById('attachBtn');
+const emojiBtn       = document.getElementById('emojiBtn');
 const uploadProg     = document.getElementById('uploadProgress');
-const notifBtn       = document.getElementById('notifBtn');
+const themeBtn       = document.getElementById('themeBtn');
+const soundBtn       = document.getElementById('soundBtn');
+const usersSidebarEl = document.getElementById('usersSidebar');
+const usersBtn       = document.getElementById('usersBtn');
+const onlineCountEl  = document.getElementById('onlineCount');
 
-// ── WebSocket ─────────────────────────────
+// ── State ─────────────────────────────────────
+let socket;
+let unreadCount = 0;
+let soundEnabled = true;
+let emojiPickerOpen = false;
+let reactionPickerTarget = null;
+let currentReactionPicker = null;
+const messageReactions = {}; // { messageId: { emoji: [username,...] } }
+
+// ── Theme ─────────────────────────────────────
+const savedTheme = localStorage.getItem('chat-theme') || 'dark';
+if (savedTheme === 'light') document.body.classList.add('light-mode');
+updateThemeBtn();
+
+function updateThemeBtn() {
+  if (themeBtn) {
+    const isLight = document.body.classList.contains('light-mode');
+    themeBtn.textContent = isLight ? '☀️' : '🌙';
+    themeBtn.title = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
+  }
+}
+
+if (themeBtn) {
+  themeBtn.addEventListener('click', () => {
+    document.body.classList.toggle('light-mode');
+    const theme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+    localStorage.setItem('chat-theme', theme);
+    updateThemeBtn();
+    showToast('Theme', theme === 'light' ? '☀️ Light mode on' : '🌙 Dark mode on');
+  });
+}
+
+// ── Sound ─────────────────────────────────────
+function createBeep(type = 'receive') {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    if (type === 'receive') {
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.08);
+    } else {
+      osc.frequency.setValueAtTime(660, ctx.currentTime);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.06);
+    }
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.22);
+  } catch (e) { /* AudioContext not available */ }
+}
+
+function playSound(type) {
+  if (!soundEnabled) return;
+  createBeep(type);
+}
+
+if (soundBtn) {
+  soundEnabled = localStorage.getItem('chat-sound') !== 'off';
+  updateSoundBtn();
+  soundBtn.addEventListener('click', () => {
+    soundEnabled = !soundEnabled;
+    localStorage.setItem('chat-sound', soundEnabled ? 'on' : 'off');
+    updateSoundBtn();
+    showToast('Sound', soundEnabled ? '🔊 Sound on' : '🔇 Sound off');
+  });
+}
+
+function updateSoundBtn() {
+  if (!soundBtn) return;
+  soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+  soundBtn.title = soundEnabled ? 'Mute sounds' : 'Enable sounds';
+}
+
+// ── Users Sidebar Toggle ──────────────────────
+if (usersBtn && usersSidebarEl) {
+  usersBtn.addEventListener('click', () => {
+    usersSidebarEl.classList.toggle('collapsed');
+    usersBtn.classList.toggle('active');
+  });
+}
+
+// ── Emoji Picker ──────────────────────────────
+const EMOJI_CATEGORIES = {
+  '😊': ['😀','😁','😂','🤣','😊','😇','🙂','😉','😍','🥰','😘','😋','😎','🤩','😏','😒','😔','😢','😭','😤','😡','🤬','😱','😨','😰','🤗','🤔','🙄','😴','🤧','🥺','😠','🥳','🤪','😜','😝','😛','🤑','🤠'],
+  '👍': ['👍','👎','👏','🙌','🤝','🤜','🤛','✊','👊','🤚','✋','🖐','👋','🤙','💪','🦵','🦶','👂','👃','🧠','🫀','🫁','🦷','🦴','👀','👁','👅','👄','💋','🤲','🤜','🤛'],
+  '❤️': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☯️','🔥','⭐','✨','💫','⚡','🌟','🌈','☀️','🌙','🌊','🌸','🌺','🌹','🌻','🌼','🌷'],
+  '🎉': ['🎉','🎊','🎈','🎁','🎀','🎗','🎟','🎫','🏆','🥇','🥈','🥉','🎖','🎗','🏅','🎯','🎮','🎲','🎳','🎰','🎭','🎨','🎬','🎤','🎧','🎵','🎶','🎷','🎸','🎹','🎺','🎻','🥁'],
+  '🐶': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🦆','🦅','🦉','🦇','🐺','🐗','🦄','🐝','🦋','🐛','🐌','🐞'],
+  '🍕': ['🍕','🍔','🌮','🌯','🥪','🍟','🌭','🍿','🧆','🥚','🍳','🥞','🧇','🥓','🥩','🍗','🍖','🦴','🌮','🍣','🍱','🍜','🍝','🍛','🍲','🥘','🫕','🥣','🥗','🧂'],
+};
+
+let currentEmojiCategory = '😊';
+let emojiSearchQuery = '';
+
+function createEmojiPicker() {
+  const picker = document.createElement('div');
+  picker.className = 'emoji-picker';
+  picker.id = 'emojiPicker';
+
+  const tabs = Object.keys(EMOJI_CATEGORIES).map(cat =>
+    `<button class="emoji-tab ${cat === currentEmojiCategory ? 'active' : ''}" data-cat="${cat}">${cat}</button>`
+  ).join('');
+
+  picker.innerHTML = `
+    <div class="emoji-picker-tabs">${tabs}</div>
+    <div class="emoji-search">
+      <input type="text" placeholder="Search emoji..." id="emojiSearch" value="${emojiSearchQuery}">
+    </div>
+    <div class="emoji-grid" id="emojiGrid"></div>
+  `;
+
+  document.querySelector('.chat-input-area')?.parentElement?.appendChild(picker);
+
+  renderEmojiGrid(picker);
+
+  picker.querySelectorAll('.emoji-tab').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      currentEmojiCategory = e.target.dataset.cat;
+      picker.querySelectorAll('.emoji-tab').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      emojiSearchQuery = '';
+      picker.querySelector('#emojiSearch').value = '';
+      renderEmojiGrid(picker);
+    });
+  });
+
+  picker.querySelector('#emojiSearch').addEventListener('input', (e) => {
+    emojiSearchQuery = e.target.value;
+    renderEmojiGrid(picker);
+  });
+
+  return picker;
+}
+
+function renderEmojiGrid(picker) {
+  const grid = picker.querySelector('#emojiGrid');
+  const emojis = emojiSearchQuery
+    ? Object.values(EMOJI_CATEGORIES).flat().filter((_, i, arr) => {
+        const all = Object.values(EMOJI_CATEGORIES).flat();
+        return true;
+      }).filter(e => e.includes(emojiSearchQuery) || emojiSearchQuery === '')
+    : EMOJI_CATEGORIES[currentEmojiCategory];
+
+  const filtered = emojiSearchQuery
+    ? Object.values(EMOJI_CATEGORIES).flat().filter((e, i, arr) => arr.indexOf(e) === i)
+    : EMOJI_CATEGORIES[currentEmojiCategory];
+
+  grid.innerHTML = filtered.map(emoji =>
+    `<button class="emoji-btn" data-emoji="${emoji}">${emoji}</button>`
+  ).join('');
+
+  grid.querySelectorAll('.emoji-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pos = messageInput.selectionStart || messageInput.value.length;
+      const val = messageInput.value;
+      messageInput.value = val.slice(0, pos) + btn.dataset.emoji + val.slice(pos);
+      messageInput.focus();
+      messageInput.selectionStart = messageInput.selectionEnd = pos + btn.dataset.emoji.length;
+      closeEmojiPicker();
+    });
+  });
+}
+
+function toggleEmojiPicker() {
+  const existing = document.getElementById('emojiPicker');
+  if (existing) {
+    closeEmojiPicker();
+  } else {
+    emojiPickerOpen = true;
+    createEmojiPicker();
+  }
+}
+
+function closeEmojiPicker() {
+  const picker = document.getElementById('emojiPicker');
+  if (picker) picker.remove();
+  emojiPickerOpen = false;
+}
+
+if (emojiBtn) {
+  emojiBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleEmojiPicker();
+  });
+}
+
+document.addEventListener('click', (e) => {
+  if (emojiPickerOpen && !e.target.closest('#emojiPicker') && e.target !== emojiBtn) {
+    closeEmojiPicker();
+  }
+  if (currentReactionPicker && !e.target.closest('.reaction-picker') && !e.target.closest('.reaction-trigger')) {
+    closeReactionPicker();
+  }
+});
+
+// ── Reaction Picker ───────────────────────────
+const QUICK_REACTIONS = ['👍','❤️','😂','😮','😢','🔥','👏','🎉'];
+
+function showReactionPicker(triggerEl, messageId) {
+  closeReactionPicker();
+
+  const picker = document.createElement('div');
+  picker.className = 'reaction-picker';
+  picker.innerHTML = QUICK_REACTIONS.map(e =>
+    `<span class="reaction-option" data-emoji="${e}" data-msgid="${messageId}">${e}</span>`
+  ).join('');
+
+  const rect = triggerEl.getBoundingClientRect();
+  picker.style.cssText = `
+    position: fixed;
+    top: ${rect.top - 60}px;
+    left: ${rect.left - 60}px;
+  `;
+
+  document.body.appendChild(picker);
+  currentReactionPicker = picker;
+
+  picker.querySelectorAll('.reaction-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      toggleReaction(messageId, opt.dataset.emoji);
+      closeReactionPicker();
+    });
+  });
+}
+
+function closeReactionPicker() {
+  if (currentReactionPicker) {
+    currentReactionPicker.remove();
+    currentReactionPicker = null;
+  }
+}
+
+function toggleReaction(messageId, emoji) {
+  if (!messageReactions[messageId]) messageReactions[messageId] = {};
+  const r = messageReactions[messageId];
+  if (!r[emoji]) r[emoji] = [];
+
+  const idx = r[emoji].indexOf(CURRENT_USER);
+  if (idx === -1) {
+    r[emoji].push(CURRENT_USER);
+  } else {
+    r[emoji].splice(idx, 1);
+    if (r[emoji].length === 0) delete r[emoji];
+  }
+  renderReactions(messageId);
+}
+
+function renderReactions(messageId) {
+  const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!msgEl) return;
+
+  let reactEl = msgEl.querySelector('.message-reactions');
+  if (!reactEl) {
+    reactEl = document.createElement('div');
+    reactEl.className = 'message-reactions';
+    msgEl.querySelector('.message-footer')?.before(reactEl);
+  }
+
+  const reactions = messageReactions[messageId] || {};
+  reactEl.innerHTML = Object.entries(reactions).map(([emoji, users]) => {
+    const mine = users.includes(CURRENT_USER);
+    return `<span class="reaction-pill ${mine ? 'mine' : ''}" 
+                  onclick="toggleReaction('${messageId}','${emoji}')"
+                  title="${users.join(', ')}">
+              ${emoji} <span class="reaction-count">${users.length}</span>
+            </span>`;
+  }).join('');
+}
+
+// ── WebSocket ─────────────────────────────────
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat/${ROOM_SLUG}/`;
-let socket;
 
 function bindSocketEvents(ws) {
   ws.onopen = () => {
     statusEl.textContent = 'Connected';
-    statusEl.className   = 'status-badge connected';
+    statusEl.className   = 'status connected';
     scrollToBottom();
   };
   ws.onclose = () => {
     statusEl.textContent = 'Disconnected';
-    statusEl.className   = 'status-badge disconnected';
+    statusEl.className   = 'status disconnected';
     setTimeout(createSocket, 3000);
   };
   ws.onerror = (err) => console.error('WebSocket error:', err);
@@ -43,35 +325,32 @@ function bindSocketEvents(ws) {
       });
       scrollToBottom();
       if (data.username !== CURRENT_USER) {
-        showToast(data.username, data.message);
+        playSound('receive');
+        showToast(data.username, data.message.substring(0, 60));
         showBrowserNotif(data.username, data.message);
         if (document.hidden) {
           unreadCount++;
-          document.title = `(${unreadCount}) #${ROOM_SLUG} — Nexus`;
+          document.title = `(${unreadCount}) ${ROOM_SLUG} — Chat`;
         }
+      } else {
+        playSound('send');
       }
     }
     else if (data.type === 'user_join') {
-      appendSystemMessage(`${data.username} joined the channel`);
+      appendSystemMessage(`${data.username} joined the room`);
     }
     else if (data.type === 'typing') {
-      if (data.username !== CURRENT_USER) {
-        typingName.textContent = `${data.username} is typing…`;
-        typingEl.style.display = 'flex';
-      }
+      if (data.username !== CURRENT_USER) showTyping(data.username);
     }
     else if (data.type === 'stop_typing') {
-      typingEl.style.display = 'none';
+      hideTyping();
     }
     else if (data.type === 'online_count') {
-      document.getElementById('onlineCount').textContent = data.count;
+      if (onlineCountEl) onlineCountEl.textContent = data.count;
     }
     else if (data.type === 'message_read') {
-      const row = document.querySelector(`[data-message-id="${data.message_id}"]`);
-      if (row) {
-        const tick = row.querySelector('.read-tick');
-        if (tick) { tick.textContent = '✓✓'; tick.classList.add('seen'); }
-      }
+      const el = document.querySelector(`[data-message-id="${data.message_id}"] .read-badge`);
+      if (el) el.textContent = '✓✓';
     }
   };
 }
@@ -82,16 +361,53 @@ function createSocket() {
 }
 createSocket();
 
-// ── Send Text ─────────────────────────────
+// ── Typing Indicator ──────────────────────────
+let typingUsers = {};
+let typingTimeout;
+
+function showTyping(username) {
+  typingUsers[username] = true;
+  updateTypingDisplay();
+}
+function hideTyping(username) {
+  if (username) delete typingUsers[username];
+  else typingUsers = {};
+  updateTypingDisplay();
+}
+function updateTypingDisplay() {
+  const users = Object.keys(typingUsers);
+  if (users.length === 0) {
+    typingEl.innerHTML = '';
+  } else {
+    const names = users.join(', ');
+    typingEl.innerHTML = `
+      <div class="typing-dots">
+        <span></span><span></span><span></span>
+      </div>
+      ${escapeHtml(names)} ${users.length === 1 ? 'is typing' : 'are typing'}...
+    `;
+  }
+}
+
+// ── Text Message ──────────────────────────────
 function sendMessage() {
   const content = messageInput.value.trim();
   if (!content || !socket || socket.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify({ message: content }));
   messageInput.value = '';
+  messageInput.style.height = 'auto';
   messageInput.focus();
 }
 
-// ── File Upload ───────────────────────────
+// ── Auto-resize textarea ──────────────────────
+if (messageInput) {
+  messageInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+}
+
+// ── File Upload ───────────────────────────────
 function openFilePicker() {
   const input = document.createElement('input');
   input.type   = 'file';
@@ -105,13 +421,12 @@ function openFilePicker() {
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      showToast('Error', 'File must be under 10 MB');
+      showToast('Error', 'File size cannot exceed 10MB');
       return;
     }
 
-    uploadProg.classList.add('active');
-    uploadProg.style.display = 'flex';
-    if (attachBtn) attachBtn.disabled = true;
+    if (uploadProg) uploadProg.style.display = 'flex';
+    if (attachBtn)  attachBtn.disabled = true;
 
     const formData = new FormData();
     formData.append('file', file);
@@ -127,6 +442,7 @@ function openFilePicker() {
         throw new Error(err.error || 'Upload failed');
       }
       const data = await res.json();
+
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
           type:       'file_message',
@@ -137,59 +453,64 @@ function openFilePicker() {
         }));
       }
     } catch (err) {
-      showToast('Upload failed', err.message);
+      showToast('Upload Error', err.message);
     } finally {
-      uploadProg.style.display = 'none';
-      uploadProg.classList.remove('active');
-      if (attachBtn) attachBtn.disabled = false;
+      if (uploadProg) uploadProg.style.display = 'none';
+      if (attachBtn)  attachBtn.disabled = false;
     }
   });
 
   input.click();
 }
 
-if (attachBtn) attachBtn.addEventListener('click', openFilePicker);
+if (attachBtn) {
+  attachBtn.addEventListener('click', openFilePicker);
+}
 
-// ── Render Message ────────────────────────
+// ── Render Message ────────────────────────────
+let lastAuthor = null;
+let lastMsgTime = null;
+
 function appendMessage({ content, username, timestamp, messageId, fileUrl, fileType, own }) {
-  const row = document.createElement('div');
-  row.className = `message-row ${own ? 'own' : ''}`;
-  row.setAttribute('data-message-id', messageId);
+  const isGrouped = username === lastAuthor;
+  lastAuthor = username;
+
+  const div = document.createElement('div');
+  div.className = `message ${own ? 'own' : ''} ${isGrouped ? 'grouped' : ''}`;
+  div.setAttribute('data-message-id', messageId);
 
   let bubbleInner = '';
   if (fileUrl) {
     if (fileType === 'image') {
       bubbleInner = `<img src="${fileUrl}" class="msg-image"
-                       onclick="window.open(this.src)" alt="${escHtml(content)}">`;
+                       onclick="window.open(this.src)" alt="${escapeHtml(content)}">`;
     } else {
-      bubbleInner = `
-        <a href="${fileUrl}" class="msg-file" download>
-          <div class="msg-file-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          ${escHtml(content)}
-        </a>`;
+      bubbleInner = `<a href="${fileUrl}" class="msg-file" download>📎 ${escapeHtml(content)}</a>`;
     }
   } else {
-    bubbleInner = escHtml(content);
+    bubbleInner = escapeHtml(content);
   }
 
-  const initials = username ? username[0].toUpperCase() : '?';
+  div.innerHTML = `
+    <div class="message-author">${escapeHtml(username)}</div>
+    <div class="message-bubble">
+      ${bubbleInner}
+      <span class="reaction-trigger" title="Add reaction">😊</span>
+    </div>
+    <div class="message-footer">
+      <span class="message-time">${timestamp}</span>
+      ${own ? '<span class="read-badge">✓</span>' : ''}
+    </div>
+  `;
 
-  row.innerHTML = `
-    <div class="message-avatar">${initials}</div>
-    <div class="message-col">
-      <div class="message-name">${escHtml(username)}</div>
-      <div class="message-bubble">${bubbleInner}</div>
-      <div class="message-meta">
-        <span class="message-time">${timestamp}</span>
-        ${own ? '<span class="read-tick">✓</span>' : ''}
-      </div>
-    </div>`;
+  // Reaction trigger
+  const trigger = div.querySelector('.reaction-trigger');
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showReactionPicker(trigger, messageId);
+  });
 
-  chatMessages.appendChild(row);
+  chatMessages.appendChild(div);
 
   if (!own && socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'mark_as_read', message_id: messageId }));
@@ -197,70 +518,63 @@ function appendMessage({ content, username, timestamp, messageId, fileUrl, fileT
 }
 
 function appendSystemMessage(text) {
+  lastAuthor = null;
   const div = document.createElement('div');
-  div.className = 'system-msg';
-  div.innerHTML = `<span>${escHtml(text)}</span>`;
+  div.className = 'message system';
+  div.innerHTML = `<div class="message-bubble">${escapeHtml(text)}</div>`;
   chatMessages.appendChild(div);
   scrollToBottom();
 }
 
-function scrollToBottom() {
-  chatMessages.scrollTop = chatMessages.scrollHeight;
+function scrollToBottom(smooth = false) {
+  chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
 }
 
-function escHtml(text) {
+function escapeHtml(text) {
   return String(text)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ── Toast ─────────────────────────────────
+// ── Toast ─────────────────────────────────────
 function showToast(title, body) {
   if (!toastContainer) return;
   const t = document.createElement('div');
   t.className = 'toast';
-  const initials = title ? title[0].toUpperCase() : '?';
-  t.innerHTML = `
-    <div class="toast-header">
-      <div class="toast-avatar">${initials}</div>
-      <span class="toast-name">${escHtml(String(title))}</span>
-    </div>
-    <div class="toast-body">${escHtml(String(body))}</div>`;
+  t.innerHTML = `<div class="toast-title">💬 ${escapeHtml(String(title))}</div>
+                 <div class="toast-body">${escapeHtml(String(body).substring(0,80))}</div>`;
   toastContainer.appendChild(t);
-  setTimeout(() => {
-    t.style.transition = 'opacity 0.2s, transform 0.2s';
-    t.style.opacity = '0';
-    t.style.transform = 'translateX(8px)';
-    setTimeout(() => t.remove(), 200);
-  }, 3800);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(20px)'; }, 3500);
+  setTimeout(() => t.remove(), 3800);
 }
 
-// ── Browser Notification ──────────────────
+// ── Browser Notification ──────────────────────
+let notifBtn = document.getElementById('notifBtn');
 function showBrowserNotif(username, message) {
   if (!document.hidden || !('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
   try {
-    const n = new Notification(`${username}`, { body: message, icon: '/static/favicon.ico' });
+    const n = new Notification(`💬 ${username}`, { body: message, icon: '/static/favicon.ico' });
     n.onclick = () => { window.focus(); n.close(); };
-  } catch (e) {}
+  } catch (e) { /* ignore */ }
 }
-
 if (notifBtn) {
   if (Notification.permission === 'granted') {
-    notifBtn.textContent = 'Notified';
-    notifBtn.classList.add('enabled');
+    notifBtn.textContent = '🔔';
+    notifBtn.style.color = 'var(--green)';
+    notifBtn.title = 'Notifications Enabled';
   }
   notifBtn.addEventListener('click', async () => {
-    if (!('Notification' in window)) { showToast('Info', 'Notifications not supported'); return; }
+    if (!('Notification' in window)) { showToast('Info', 'Notifications not supported in this browser'); return; }
     const perm = await Notification.requestPermission();
     if (perm === 'granted') {
-      notifBtn.textContent = 'Notified';
-      notifBtn.classList.add('enabled');
+      notifBtn.style.color = 'var(--green)';
+      showToast('Notification', '🔔 Notifications enabled ✓');
     }
   });
 }
 
-// ── Typing ────────────────────────────────
+// ── Typing Events ─────────────────────────────
 let typingTimer;
 messageInput.addEventListener('input', () => {
   clearTimeout(typingTimer);
@@ -272,18 +586,16 @@ messageInput.addEventListener('input', () => {
   }, 1500);
 });
 
-// ── Events ────────────────────────────────
+// ── Events ────────────────────────────────────
 sendBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 
-// ── Unread counter ────────────────────────
-let unreadCount = 0;
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     unreadCount = 0;
-    document.title = `#${ROOM_SLUG} — Nexus`;
+    document.title = `${ROOM_SLUG} — Django Chat`;
   }
 });
 
