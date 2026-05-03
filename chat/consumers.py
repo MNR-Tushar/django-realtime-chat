@@ -1,22 +1,18 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from django.utils import timezone
 from .models import Message, Room
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import get_object_or_404, redirect
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
         """Client WebSocket connect"""
-        #
         self.room_slug = self.scope['url_route']['kwargs']['room_slug']
         self.room_group_name = f'chat_{self.room_slug}'
         self.user = self.scope['user']
 
-        # Authenticated user check 
+        # Authenticated user check
         if not self.user.is_authenticated:
             await self.close()
             return
@@ -26,11 +22,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.room_group_name,
             self.channel_name
         )
-        
+
         # Connection accept
         await self.accept()
 
-        # User online mark 
+        # User online mark
         await self.set_user_online(True)
 
         # User join notification
@@ -42,13 +38,37 @@ class ChatConsumer(AsyncWebsocketConsumer):
             }
         )
 
+        
+        count = await self.get_online_count()
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'online_count',
+                'count': count,
+            }
+        )
+
     async def disconnect(self, close_code):
         """Client disconnect"""
-        await self.channel_layer.group_discard(
-            self.room_group_name,
-            self.channel_name
-        )
-        await self.set_user_online(False)
+        
+        if hasattr(self, 'room_group_name'):
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
+
+        if hasattr(self, 'user') and self.user.is_authenticated:
+            await self.set_user_online(False)
+
+            
+            count = await self.get_online_count()
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'online_count',
+                    'count': count,
+                }
+            )
 
     async def receive(self, text_data):
         """Client message"""
@@ -92,10 +112,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if not message_content:
             return
 
-        # Message save
+        # Save message
         message = await self.save_message(message_content)
+        if message is None:
+            return
 
-        # Message send to group
         await self.channel_layer.group_send(
             self.room_group_name,
             {
@@ -108,7 +129,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
 
     async def chat_message(self, event):
-        """Message send to client"""
         await self.send(text_data=json.dumps({
             'type': 'chat_message',
             'message': event['message'],
@@ -130,28 +150,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
         }))
 
     async def user_join(self, event):
-        """User join notification"""
         await self.send(text_data=json.dumps({
             'type': 'user_join',
             'username': event['username'],
         }))
 
     async def online_count(self, event):
-        """Send online user count"""
         await self.send(text_data=json.dumps({
             'type': 'online_count',
             'count': event['count'],
         }))
 
     async def message_read(self, event):
-        """Message read notification"""
         await self.send(text_data=json.dumps({
             'type': 'message_read',
             'message_id': event['message_id'],
             'username': event['username'],
         }))
 
-    # ── Database helpers (sync → async) ──
+    # ── Database helpers ──
 
     @database_sync_to_async
     def get_online_count(self):
@@ -169,15 +186,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def save_message(self, content):
-        room = Room.objects.get(slug=self.room_slug)
-        return Message.objects.create(
-            room=room,
-            author=self.user,
-            content=content
-        )
+        
+        try:
+            room = Room.objects.get(slug=self.room_slug)
+            return Message.objects.create(
+                room=room,
+                author=self.user,
+                content=content
+            )
+        except Room.DoesNotExist:
+            return None
 
     @database_sync_to_async
     def set_user_online(self, status):
         self.user.is_online = status
         self.user.save(update_fields=['is_online'])
-        
