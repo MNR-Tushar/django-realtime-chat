@@ -4,12 +4,11 @@ const messageInput   = document.getElementById('messageInput');
 const sendBtn        = document.getElementById('sendBtn');
 const statusEl       = document.getElementById('connectionStatus');
 const typingEl       = document.getElementById('typingIndicator');
+const typingName     = document.getElementById('typingName');
 const toastContainer = document.getElementById('toastContainer');
-
-// Optional elements — null check করা হবে use করার আগে
-const attachBtn  = document.getElementById('attachBtn');
-const uploadProg = document.getElementById('uploadProgress');
-const notifBtn   = document.getElementById('notifBtn');
+const attachBtn      = document.getElementById('attachBtn');
+const uploadProg     = document.getElementById('uploadProgress');
+const notifBtn       = document.getElementById('notifBtn');
 
 // ── WebSocket ─────────────────────────────
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -19,12 +18,12 @@ let socket;
 function bindSocketEvents(ws) {
   ws.onopen = () => {
     statusEl.textContent = 'Connected';
-    statusEl.className   = 'status connected';
+    statusEl.className   = 'status-badge connected';
     scrollToBottom();
   };
   ws.onclose = () => {
     statusEl.textContent = 'Disconnected';
-    statusEl.className   = 'status disconnected';
+    statusEl.className   = 'status-badge disconnected';
     setTimeout(createSocket, 3000);
   };
   ws.onerror = (err) => console.error('WebSocket error:', err);
@@ -48,17 +47,31 @@ function bindSocketEvents(ws) {
         showBrowserNotif(data.username, data.message);
         if (document.hidden) {
           unreadCount++;
-          document.title = `(${unreadCount}) ${ROOM_SLUG} — Django Chat`;
+          document.title = `(${unreadCount}) #${ROOM_SLUG} — Nexus`;
         }
       }
     }
-    else if (data.type === 'user_join')    appendSystemMessage(`${data.username} joined`);
-    else if (data.type === 'typing')       { if (data.username !== CURRENT_USER) typingEl.textContent = `${data.username} লেখতেছে...`; }
-    else if (data.type === 'stop_typing')  typingEl.textContent = '';
-    else if (data.type === 'online_count') document.getElementById('onlineCount').textContent = data.count;
+    else if (data.type === 'user_join') {
+      appendSystemMessage(`${data.username} joined the channel`);
+    }
+    else if (data.type === 'typing') {
+      if (data.username !== CURRENT_USER) {
+        typingName.textContent = `${data.username} is typing…`;
+        typingEl.style.display = 'flex';
+      }
+    }
+    else if (data.type === 'stop_typing') {
+      typingEl.style.display = 'none';
+    }
+    else if (data.type === 'online_count') {
+      document.getElementById('onlineCount').textContent = data.count;
+    }
     else if (data.type === 'message_read') {
-      const el = document.querySelector(`[data-message-id="${data.message_id}"] .read-badge`);
-      if (el) el.textContent = '✓✓';
+      const row = document.querySelector(`[data-message-id="${data.message_id}"]`);
+      if (row) {
+        const tick = row.querySelector('.read-tick');
+        if (tick) { tick.textContent = '✓✓'; tick.classList.add('seen'); }
+      }
     }
   };
 }
@@ -69,7 +82,7 @@ function createSocket() {
 }
 createSocket();
 
-// ── Text Message ──────────────────────────
+// ── Send Text ─────────────────────────────
 function sendMessage() {
   const content = messageInput.value.trim();
   if (!content || !socket || socket.readyState !== WebSocket.OPEN) return;
@@ -79,9 +92,6 @@ function sendMessage() {
 }
 
 // ── File Upload ───────────────────────────
-// FIX: <input type="file"> dynamically তৈরি করো — body তে append করে click।
-// এতে room.html এ element না থাকলেও কাজ করবে,
-// আর browser indirect .click() block করার সমস্যাও থাকবে না।
 function openFilePicker() {
   const input = document.createElement('input');
   input.type   = 'file';
@@ -95,12 +105,13 @@ function openFilePicker() {
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      showToast('Error', 'File size 10MB এর বেশি হবে না');
+      showToast('Error', 'File must be under 10 MB');
       return;
     }
 
-    if (uploadProg) uploadProg.style.display = 'block';
-    if (attachBtn)  attachBtn.disabled = true;
+    uploadProg.classList.add('active');
+    uploadProg.style.display = 'flex';
+    if (attachBtn) attachBtn.disabled = true;
 
     const formData = new FormData();
     formData.append('file', file);
@@ -116,7 +127,6 @@ function openFilePicker() {
         throw new Error(err.error || 'Upload failed');
       }
       const data = await res.json();
-
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
           type:       'file_message',
@@ -127,46 +137,59 @@ function openFilePicker() {
         }));
       }
     } catch (err) {
-      showToast('Upload Error', err.message);
+      showToast('Upload failed', err.message);
     } finally {
-      if (uploadProg) uploadProg.style.display = 'none';
-      if (attachBtn)  attachBtn.disabled = false;
+      uploadProg.style.display = 'none';
+      uploadProg.classList.remove('active');
+      if (attachBtn) attachBtn.disabled = false;
     }
   });
 
   input.click();
 }
 
-if (attachBtn) {
-  attachBtn.addEventListener('click', openFilePicker);
-}
+if (attachBtn) attachBtn.addEventListener('click', openFilePicker);
 
-// ── Render ────────────────────────────────
+// ── Render Message ────────────────────────
 function appendMessage({ content, username, timestamp, messageId, fileUrl, fileType, own }) {
-  const div = document.createElement('div');
-  div.className = `message ${own ? 'own' : ''}`;
-  div.setAttribute('data-message-id', messageId);
+  const row = document.createElement('div');
+  row.className = `message-row ${own ? 'own' : ''}`;
+  row.setAttribute('data-message-id', messageId);
 
   let bubbleInner = '';
   if (fileUrl) {
     if (fileType === 'image') {
       bubbleInner = `<img src="${fileUrl}" class="msg-image"
-                       onclick="window.open(this.src)" alt="${escapeHtml(content)}">`;
+                       onclick="window.open(this.src)" alt="${escHtml(content)}">`;
     } else {
-      bubbleInner = `<a href="${fileUrl}" class="msg-file" download>📎 ${escapeHtml(content)}</a>`;
+      bubbleInner = `
+        <a href="${fileUrl}" class="msg-file" download>
+          <div class="msg-file-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          ${escHtml(content)}
+        </a>`;
     }
   } else {
-    bubbleInner = escapeHtml(content);
+    bubbleInner = escHtml(content);
   }
 
-  div.innerHTML = `
-    <div class="message-author">${escapeHtml(username)}</div>
-    <div class="message-bubble">${bubbleInner}</div>
-    <div class="message-footer">
-      <span class="message-time">${timestamp}</span>
-      ${own ? '<span class="read-badge">✓</span>' : ''}
+  const initials = username ? username[0].toUpperCase() : '?';
+
+  row.innerHTML = `
+    <div class="message-avatar">${initials}</div>
+    <div class="message-col">
+      <div class="message-name">${escHtml(username)}</div>
+      <div class="message-bubble">${bubbleInner}</div>
+      <div class="message-meta">
+        <span class="message-time">${timestamp}</span>
+        ${own ? '<span class="read-tick">✓</span>' : ''}
+      </div>
     </div>`;
-  chatMessages.appendChild(div);
+
+  chatMessages.appendChild(row);
 
   if (!own && socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'mark_as_read', message_id: messageId }));
@@ -175,15 +198,17 @@ function appendMessage({ content, username, timestamp, messageId, fileUrl, fileT
 
 function appendSystemMessage(text) {
   const div = document.createElement('div');
-  div.className = 'message system';
-  div.innerHTML = `<div class="message-bubble">${escapeHtml(text)}</div>`;
+  div.className = 'system-msg';
+  div.innerHTML = `<span>${escHtml(text)}</span>`;
   chatMessages.appendChild(div);
   scrollToBottom();
 }
 
-function scrollToBottom() { chatMessages.scrollTop = chatMessages.scrollHeight; }
+function scrollToBottom() {
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
 
-function escapeHtml(text) {
+function escHtml(text) {
   return String(text)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -194,10 +219,20 @@ function showToast(title, body) {
   if (!toastContainer) return;
   const t = document.createElement('div');
   t.className = 'toast';
-  t.innerHTML = `<div class="toast-title">💬 ${escapeHtml(String(title))}</div>
-                 <div class="toast-body">${escapeHtml(String(body))}</div>`;
+  const initials = title ? title[0].toUpperCase() : '?';
+  t.innerHTML = `
+    <div class="toast-header">
+      <div class="toast-avatar">${initials}</div>
+      <span class="toast-name">${escHtml(String(title))}</span>
+    </div>
+    <div class="toast-body">${escHtml(String(body))}</div>`;
   toastContainer.appendChild(t);
-  setTimeout(() => t.remove(), 4000);
+  setTimeout(() => {
+    t.style.transition = 'opacity 0.2s, transform 0.2s';
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(8px)';
+    setTimeout(() => t.remove(), 200);
+  }, 3800);
 }
 
 // ── Browser Notification ──────────────────
@@ -205,25 +240,22 @@ function showBrowserNotif(username, message) {
   if (!document.hidden || !('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
   try {
-    const n = new Notification(`💬 ${username}`, { body: message });
+    const n = new Notification(`${username}`, { body: message, icon: '/static/favicon.ico' });
     n.onclick = () => { window.focus(); n.close(); };
-  } catch (e) { /* ignore */ }
+  } catch (e) {}
 }
 
 if (notifBtn) {
   if (Notification.permission === 'granted') {
-    notifBtn.textContent = '🔔 Enabled';
-    notifBtn.style.color = 'var(--green)';
+    notifBtn.textContent = 'Notified';
+    notifBtn.classList.add('enabled');
   }
   notifBtn.addEventListener('click', async () => {
-    if (!('Notification' in window)) { showToast('Info', 'এই browser এ notification নেই'); return; }
+    if (!('Notification' in window)) { showToast('Info', 'Notifications not supported'); return; }
     const perm = await Notification.requestPermission();
     if (perm === 'granted') {
-      notifBtn.textContent = '🔔 Enabled';
-      notifBtn.style.color = 'var(--green)';
-      showToast('Notification', 'চালু হয়েছে ✓');
-    } else {
-      showToast('Notification', 'Permission দেওয়া হয়নি');
+      notifBtn.textContent = 'Notified';
+      notifBtn.classList.add('enabled');
     }
   });
 }
@@ -246,9 +278,13 @@ messageInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 
+// ── Unread counter ────────────────────────
 let unreadCount = 0;
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { unreadCount = 0; document.title = `${ROOM_SLUG} — Django Chat`; }
+  if (!document.hidden) {
+    unreadCount = 0;
+    document.title = `#${ROOM_SLUG} — Nexus`;
+  }
 });
 
 scrollToBottom();

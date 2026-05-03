@@ -1,33 +1,45 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Django Chat{% endblock %}</title>
+  <title>{% block title %}Nexus Chat{% endblock %}</title>
   {% load static %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
   {% block extra_css %}{% endblock %}
 </head>
 <body>
 
 <nav class="navbar">
-  <div class="nav-brand">💬 Django Chat</div>
-  <div class="nav-links">
+  <div class="nav-left">
+    <div class="nav-brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Nexus
+    </div>
+  </div>
+  <div class="nav-right">
     {% if user.is_authenticated %}
-      <span class="nav-user">👤 {{ user.username }}</span>
-    
+      <div class="nav-user">
+        <div class="user-avatar">{{ user.username|slice:":1"|upper }}</div>
+        <span class="nav-username">{{ user.username }}</span>
+      </div>
       <form method="POST" action="{% url 'logout' %}" style="display:inline;">
         {% csrf_token %}
-        <button type="submit" class="btn btn-sm">Logout</button>
+        <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
       </form>
     {% else %}
-      <a href="{% url 'login' %}" class="btn btn-sm">Login</a>
-      <a href="{% url 'register' %}" class="btn btn-sm btn-primary">Register</a>
+      <a href="{% url 'login' %}" class="btn btn-ghost btn-sm">Sign in</a>
+      <a href="{% url 'register' %}" class="btn btn-primary btn-sm">Get started</a>
     {% endif %}
   </div>
 </nav>
 
-<main class="main-content">
+<main>
   {% block content %}{% endblock %}
 </main>
 

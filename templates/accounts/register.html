@@ -1,24 +1,40 @@
 {% extends 'base.html' %}
-{% block title %}Register{% endblock %}
+{% block title %}Create account — Nexus{% endblock %}
 
 {% block content %}
-<div class="auth-container">
+<div class="auth-wrapper">
   <div class="auth-card">
-    <h2>Account তৈরি করো</h2>
-    <form method="POST">
+
+    <div class="auth-logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Nexus
+    </div>
+
+    <h2>Create an account</h2>
+    <p class="auth-subtitle">Join Nexus and start chatting in seconds.</p>
+
+    <form method="POST" novalidate>
       {% csrf_token %}
       {% for field in form %}
         <div class="form-group">
-          <label>{{ field.label }}</label>
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
           {{ field }}
           {% if field.errors %}
-            <span class="error">{{ field.errors.0 }}</span>
+            <span class="error-msg">{{ field.errors.0 }}</span>
           {% endif %}
         </div>
       {% endfor %}
-      <button type="submit" class="btn btn-primary w-full">Register</button>
+
+      <div style="margin-top: 20px;">
+        <button type="submit" class="btn btn-primary w-full btn-lg">Create account</button>
+      </div>
     </form>
-    <p class="auth-link">Account আছে? <a href="{% url 'login' %}">Login করো</a></p>
+
+    <p class="auth-footer">
+      Already have an account? <a href="{% url 'login' %}">Sign in</a>
+    </p>
   </div>
 </div>
 {% endblock %}
