@@ -2,26 +2,94 @@
 {% load static %}
 {% block title %}{{ room.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+#toastContainer {
+  position: fixed; top: 70px; right: 16px; z-index: 999;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--primary); border-radius: 8px;
+  padding: 10px 14px; min-width: 220px; max-width: 300px;
+  font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  animation: slideIn 0.2s ease;
+}
+.toast-title { font-weight: 600; color: var(--primary); margin-bottom: 2px; }
+@keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+
+#notifBtn {
+  font-size: 12px; padding: 3px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--muted); cursor: pointer; margin-left: auto;
+}
+#notifBtn:hover { color: var(--text); }
+
+#attachBtn {
+  background: transparent; border: none; color: var(--muted);
+  font-size: 20px; cursor: pointer; padding: 0 6px;
+  line-height: 1; flex-shrink: 0;
+}
+#attachBtn:hover { color: var(--primary); }
+#attachBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.msg-image {
+  max-width: 220px; max-height: 180px; border-radius: 8px;
+  margin-top: 6px; display: block; cursor: pointer;
+}
+.msg-file {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 6px; padding: 6px 12px; border-radius: 8px;
+  background: rgba(255,255,255,0.07); color: var(--primary);
+  text-decoration: none; font-size: 13px;
+}
+.msg-file:hover { background: rgba(255,255,255,0.12); }
+
+#uploadProgress {
+  display: none; font-size: 12px; color: var(--muted); padding: 4px 20px;
+}
+.online-dot {
+  display: inline-block; width: 8px; height: 8px;
+  background: var(--green); border-radius: 50%; margin-right: 4px;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="chat-layout">
 
-  <!-- Chat Header -->
   <div class="chat-header">
     <a href="{% url 'chat:index' %}" class="back-btn">← Back</a>
     <div class="chat-header-info">
       <h2># {{ room.name }}</h2>
       <span id="connectionStatus" class="status connecting">Connecting...</span>
     </div>
-    <div class="online-count"> <span class="online-dot"></span> <span id="onlineCount">0</span> online </div>
+    <div class="online-count">
+      <span class="online-dot"></span>
+      <span id="onlineCount">0</span> online
+    </div>
+    <button id="notifBtn">🔔 Enable</button>
   </div>
 
-  <!-- Messages Area -->
   <div class="chat-messages" id="chatMessages">
     {% for message in messages %}
       <div class="message {% if message.author == request.user %}own{% endif %}"
            data-message-id="{{ message.id }}">
         <div class="message-author">{{ message.author.username }}</div>
-        <div class="message-bubble">{{ message.content }}</div>
+        <div class="message-bubble">
+          {% if message.file %}
+            {% if message.file_type == 'image' %}
+              <img src="{{ message.file.url }}" class="msg-image"
+                   onclick="window.open(this.src)" alt="{{ message.content }}">
+            {% else %}
+              <a href="{{ message.file.url }}" class="msg-file" download>
+                📎 {{ message.content }}
+              </a>
+            {% endif %}
+          {% else %}
+            {{ message.content }}
+          {% endif %}
+        </div>
         <div class="message-footer">
           <span class="message-time">{{ message.timestamp|date:"H:i" }}</span>
           {% if message.author == request.user %}
@@ -32,27 +100,25 @@
     {% endfor %}
   </div>
 
-  <!-- Typing Indicator -->
   <div class="typing-indicator" id="typingIndicator"></div>
+  <div id="uploadProgress">⬆️ Uploading...</div>
 
-  <!-- Input Area -->
   <div class="chat-input-area">
-    <input
-      type="text"
-      id="messageInput"
-      placeholder="Message লিখো..."
-      autocomplete="off"
-      maxlength="1000"
-    />
+    <button id="attachBtn" title="Attach file">📎</button>
+    <input type="text" id="messageInput" placeholder="Message লিখো..."
+           autocomplete="off" maxlength="1000"/>
     <button id="sendBtn" class="btn btn-primary">Send</button>
   </div>
 
 </div>
 
+<div id="toastContainer"></div>
 
 <script>
-  const ROOM_SLUG = "{{ room.slug }}";
+  const ROOM_SLUG    = "{{ room.slug }}";
   const CURRENT_USER = "{{ request.user.username }}";
+  const UPLOAD_URL   = "{% url 'chat:upload_file' room.slug %}";
+  const CSRF_TOKEN   = "{{ csrf_token }}";
 </script>
 {% endblock %}
 
