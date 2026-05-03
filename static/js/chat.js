@@ -45,9 +45,19 @@ function bindSocketEvents(ws) {
         content:   data.message,
         username:  data.username,
         timestamp: data.timestamp,
+        messageId: data.message_id,
         own:       data.username === CURRENT_USER,
       });
       scrollToBottom();
+      
+      // Show notification if not sender
+      if (data.username !== CURRENT_USER) {
+        showNotification(data.username, data.message);
+        if (document.hidden) {
+          unreadCount++;
+          document.title = `(${unreadCount}) ${ROOM_SLUG} — Django Chat`;
+        }
+      }
     }
     else if (data.type === 'user_join') {
       console.log('User joined:', data.username);
@@ -60,6 +70,19 @@ function bindSocketEvents(ws) {
     }
     else if (data.type === 'stop_typing') {
       typingEl.textContent = '';
+    }
+    else if (data.type === 'online_count') { 
+      document.getElementById('onlineCount').textContent = data.count; 
+    }
+    else if (data.type === 'message_read') {
+      const msgEl = document.querySelector(`[data-message-id="${data.message_id}"]`);
+      if (msgEl) {
+        msgEl.classList.add('read');
+        const readBadge = msgEl.querySelector('.read-badge');
+        if (readBadge) {
+          readBadge.textContent = '✓✓';
+        }
+      }
     }
   };
 }
@@ -102,15 +125,24 @@ function sendMessage() {
 }
 
 // ── Render Functions ──────────────────────
-function appendMessage({ content, username, timestamp, own }) {
+function appendMessage({ content, username, timestamp, messageId, own }) {
   const div = document.createElement('div');
   div.className = `message ${own ? 'own' : ''}`;
+  div.setAttribute('data-message-id', messageId);
   div.innerHTML = `
     <div class="message-author">${username}</div>
     <div class="message-bubble">${escapeHtml(content)}</div>
-    <div class="message-time">${timestamp}</div>
+    <div class="message-footer">
+      <span class="message-time">${timestamp}</span>
+      ${own ? '<span class="read-badge">✓</span>' : ''}
+    </div>
   `;
   chatMessages.appendChild(div);
+  
+  // Mark as read if not own message
+  if (!own && socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'mark_as_read', message_id: messageId }));
+  }
 }
 
 function appendSystemMessage(text) {
@@ -137,11 +169,11 @@ function escapeHtml(text) {
 let typingTimer;
 messageInput.addEventListener('input', () => {
   clearTimeout(typingTimer);
-  if (socket.readyState === WebSocket.OPEN) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'typing', username: CURRENT_USER }));
   }
   typingTimer = setTimeout(() => {
-    if (socket.readyState === WebSocket.OPEN) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: 'stop_typing' }));
     }
   }, 1500);
@@ -157,5 +189,35 @@ messageInput.addEventListener('keydown', (e) => {
   }
 });
 
-
 scrollToBottom();
+
+// ── Browser Notifications ──────────────────
+let unreadCount = 0;
+
+async function requestNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+}
+
+function showNotification(username, message) {
+  if (document.hidden && Notification.permission === 'granted') {
+    const notif = new Notification(`💬 ${username}`, {
+      body: message,
+      icon: '/static/img/icon.png',
+    });
+    notif.onclick = () => {
+      window.focus();
+      notif.close();
+    };
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    unreadCount = 0;
+    document.title = `${ROOM_SLUG} — Django Chat`;
+  }
+});
+
+requestNotifPermission();

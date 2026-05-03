@@ -12,16 +12,22 @@
       <h2># {{ room.name }}</h2>
       <span id="connectionStatus" class="status connecting">Connecting...</span>
     </div>
+    <div class="online-count"> <span class="online-dot"></span> <span id="onlineCount">0</span> online </div>
   </div>
 
   <!-- Messages Area -->
   <div class="chat-messages" id="chatMessages">
     {% for message in messages %}
       <div class="message {% if message.author == request.user %}own{% endif %}"
-           data-id="{{ message.id }}">
+           data-message-id="{{ message.id }}">
         <div class="message-author">{{ message.author.username }}</div>
         <div class="message-bubble">{{ message.content }}</div>
-        <div class="message-time">{{ message.timestamp|date:"H:i" }}</div>
+        <div class="message-footer">
+          <span class="message-time">{{ message.timestamp|date:"H:i" }}</span>
+          {% if message.author == request.user %}
+            <span class="read-badge">{% if message.is_read %}✓✓{% else %}✓{% endif %}</span>
+          {% endif %}
+        </div>
       </div>
     {% endfor %}
   </div>

@@ -15,9 +15,40 @@ def room(request, room_slug):
     """Chat room page"""
     room = get_object_or_404(Room, slug=room_slug)
     
-    
+    # Get last 50 messages
     messages = room.messages.select_related('author')[:50]
+    
+    # Mark other users' messages as read
+    room.messages.exclude(author=request.user).filter(is_read=False).update(is_read=True)
+    
     return render(request, 'chat/room.html', {
         'room': room,
         'messages': messages,
     })
+    
+@login_required 
+def direct_message(request, username): 
+    from django.contrib.auth import get_user_model 
+    User = get_user_model() 
+    other_user = get_object_or_404(User, username=username) 
+    room = Room.get_or_create_private(request.user, other_user)
+    
+    return redirect('chat:room', room_slug=room.slug)
+
+@login_required 
+def upload_file(request, room_slug):
+    if request.method != 'POST': 
+        from django.http import JsonResponse 
+        return JsonResponse({'error': 'POST only'}, status=405) 
+    room = get_object_or_404(Room, slug=room_slug)
+    uploaded = request.FILES.get('file') 
+    if not uploaded: 
+        from django.http import JsonResponse 
+        return JsonResponse({'error': 'No file'}, status=400) 
+    msg = Message.objects.create( room=room, author=request.user, content=uploaded.name, file=uploaded, file_type='image' if uploaded.content_type.startswith('image') else 'file' ) 
+    from django.http import JsonResponse 
+    return JsonResponse({'url': msg.file.url, 'id': msg.id})
+
+
+
+    

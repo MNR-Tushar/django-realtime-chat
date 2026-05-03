@@ -3,6 +3,8 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
 from .models import Message, Room
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404, redirect
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -24,6 +26,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.room_group_name,
             self.channel_name
         )
+        
         # Connection accept
         await self.accept()
 
@@ -67,6 +70,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 self.room_group_name,
                 {
                     'type': 'user_stop_typing',
+                    'username': self.user.username,
+                }
+            )
+            return
+
+        if event_type == 'mark_as_read':
+            message_id = data.get('message_id')
+            await self.mark_message_as_read(message_id)
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'message_read',
+                    'message_id': message_id,
                     'username': self.user.username,
                 }
             )
@@ -120,7 +136,36 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'username': event['username'],
         }))
 
+    async def online_count(self, event):
+        """Send online user count"""
+        await self.send(text_data=json.dumps({
+            'type': 'online_count',
+            'count': event['count'],
+        }))
+
+    async def message_read(self, event):
+        """Message read notification"""
+        await self.send(text_data=json.dumps({
+            'type': 'message_read',
+            'message_id': event['message_id'],
+            'username': event['username'],
+        }))
+
     # ── Database helpers (sync → async) ──
+
+    @database_sync_to_async
+    def get_online_count(self):
+        from django.contrib.auth import get_user_model
+        return get_user_model().objects.filter(is_online=True).count()
+
+    @database_sync_to_async
+    def mark_message_as_read(self, message_id):
+        try:
+            message = Message.objects.get(id=message_id)
+            message.is_read = True
+            message.save(update_fields=['is_read'])
+        except Message.DoesNotExist:
+            pass
 
     @database_sync_to_async
     def save_message(self, content):
@@ -135,3 +180,4 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def set_user_online(self, status):
         self.user.is_online = status
         self.user.save(update_fields=['is_online'])
+        
