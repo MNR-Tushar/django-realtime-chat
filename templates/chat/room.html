@@ -15,26 +15,66 @@
       <input type="text" placeholder="Search rooms..." id="sidebarSearch">
     </div>
     <div class="room-list" id="roomList">
-      {# Rooms injected by Django or AJAX — demo items below #}
-      <a href="{% url 'chat:room' room.slug %}" class="room-item active">
-        <div class="room-avatar">#</div>
-        <div class="room-meta">
-          <div class="room-name">{{ room.name }}</div>
-          <div class="room-preview">{{ room.description|default:"Chat here..." }}</div>
-        </div>
-      </a>
+      {% if room.is_private %}
+      
+        <a href="{% url 'chat:room' room.slug %}" class="room-item active">
+          <div class="room-avatar">🔒</div>
+          <div class="room-meta">
+            <div class="room-name">
+              {% if room.slug|slice:":3" == "dm-" %}
+               
+                {% for member in room.members.all %}
+                  {% if member != request.user %}{{ member.username }}{% endif %}
+                {% endfor %}
+              {% else %}
+                {# Private group — room name #}
+                {{ room.name }}
+              {% endif %}
+            </div>
+            <div class="room-preview">
+              {% if room.slug|slice:":3" == "dm-" %}Private chat{% else %}Private group{% endif %}
+            </div>
+          </div>
+        </a>
+      {% endif %}
+
+      {% for r in public_rooms %}
+        <a href="{% url 'chat:room' r.slug %}"
+           class="room-item {% if r.slug == room.slug %}active{% endif %}">
+          <div class="room-avatar">#</div>
+          <div class="room-meta">
+            <div class="room-name">{{ r.name }}</div>
+            <div class="room-preview">{{ r.description|default:"Chat here..." }}</div>
+          </div>
+        </a>
+      {% endfor %}
     </div>
   </aside>
 
   {# ─── MAIN CHAT ─── #}
   <main class="chat-main">
 
-    {# Chat Header #}
     <div class="chat-header">
       <a href="{% url 'chat:index' %}" class="back-btn" title="Back">←</a>
-      <div class="room-avatar-sm">💬</div>
+      <div class="room-avatar-sm">{% if room.is_private %}🔒{% else %}💬{% endif %}</div>
       <div class="chat-header-info">
-        <h2># {{ room.name }}</h2>
+        <h2>
+          {% if room.is_private %}
+            {% if room.slug|slice:":3" == "dm-" %}
+            
+              {% for member in room.members.all %}
+                {% if member != request.user %}{{ member.username }}{% endif %}
+              {% endfor %}
+              <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px;">Private Chat</span>
+            {% else %}
+              {# Private Group #}
+              🔒 {{ room.name }}
+              <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px;">Private Group</span>
+            {% endif %}
+          {% else %}
+            # {{ room.name }}
+          {% endif %}
+        </h2>
         <div class="chat-header-sub">
           <span class="online-dot"></span>
           <span id="onlineCount">0</span> online
@@ -43,19 +83,35 @@
         </div>
       </div>
       <div class="chat-header-actions">
-        <button id="notifBtn"  class="icon-btn" title="Notifications">🔔</button>
-        <button id="soundBtn"  class="icon-btn" title="Sound">🔊</button>
-        <button id="themeBtn"  class="icon-btn theme-toggle" title="Toggle Theme">🌙</button>
-        <button id="usersBtn"  class="icon-btn" title="Members">👥</button>
+        <button id="notifBtn" class="icon-btn" title="Notifications">🔔</button>
+        <button id="soundBtn" class="icon-btn" title="Sound">🔊</button>
+        <button id="themeBtn" class="icon-btn theme-toggle" title="Toggle Theme">🌙</button>
+       
+        {% if not room.slug|slice:":3" == "dm-" %}
+          <button id="usersBtn" class="icon-btn" title="Members">👥</button>
+        {% endif %}
       </div>
     </div>
 
-    {# Messages #}
     <div class="chat-messages" id="chatMessages">
-      {# Date divider #}
-      <div class="date-divider">
-        <span>Today</span>
-      </div>
+      <div class="date-divider"><span>Today</span></div>
+
+      {% if room.is_private and not messages %}
+        <div class="message system">
+          <div class="message-bubble">
+            🔒
+            {% if room.slug|slice:":3" == "dm-" %}
+              This is a private conversation. Only you and
+              {% for member in room.members.all %}
+                {% if member != request.user %}<strong>{{ member.username }}</strong>{% endif %}
+              {% endfor %}
+              can see these messages.
+            {% else %}
+              This is a private group. Only members can see these messages.
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
 
       {% for message in messages %}
         <div class="message {% if message.author == request.user %}own{% endif %}"
@@ -88,10 +144,8 @@
       {% endfor %}
     </div>
 
-    {# Typing #}
     <div class="typing-indicator" id="typingIndicator"></div>
 
-    {# Upload progress #}
     <div id="uploadProgress" style="display:none;align-items:center;gap:8px;padding:6px 20px;font-size:12px;color:var(--primary);background:var(--primary-glow);border-top:1px solid var(--border);">
       ⬆️ Uploading...
       <div style="flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden;">
@@ -99,57 +153,76 @@
       </div>
     </div>
 
-    {# Input area #}
     <div class="chat-input-area">
       <button id="attachBtn" title="Attach file">📎</button>
       <div class="input-wrapper">
         <button id="emojiBtn" title="Emoji">😊</button>
         <textarea id="messageInput"
                   placeholder="Type a message... (Enter = send, Shift+Enter = new line)"
-                  autocomplete="off"
-                  maxlength="2000"
-                  rows="1"></textarea>
+                  autocomplete="off" maxlength="2000" rows="1"></textarea>
       </div>
       <button id="sendBtn" title="Send">➤</button>
     </div>
 
   </main>
 
-  {# ─── RIGHT SIDEBAR — Users ─── #}
+  {# ─── RIGHT SIDEBAR ─── #}
+ 
+  {% if not room.slug|slice:":3" == "dm-" %}
   <aside class="users-sidebar" id="usersSidebar">
     <div class="users-sidebar-header">
       <span class="online-dot" style="animation:none;"></span>
-      Members
+      {% if room.is_private %}Private Members{% else %}Members{% endif %}
     </div>
     <div class="user-list" id="userList">
-      {# Populated via JS / AJAX or Django context #}
+
+  
       <div class="user-item">
         <div class="user-item-avatar">
           {{ request.user.username|first|upper }}
           <span class="user-status-dot online"></span>
         </div>
-        <span>{{ request.user.username }} (You)</span>
+        <span>{{ request.user.username }} <span style="font-size:11px;color:var(--muted);">(You)</span></span>
       </div>
+
+      {# Room members #}
       {% for member in room.members.all %}
         {% if member != request.user %}
-          <a href="{% url 'chat:dm' member.username %}" class="user-item">
-            <div class="user-item-avatar">
-              {{ member.username|first|upper }}
-              <span class="user-status-dot {% if member.is_online %}online{% else %}offline{% endif %}"></span>
+          {% if room.is_private %}
+           
+            <div class="user-item">
+              <div class="user-item-avatar">
+                {{ member.username|first|upper }}
+                <span class="user-status-dot {% if member.is_online %}online{% else %}offline{% endif %}"></span>
+              </div>
+              <span>
+                {{ member.username }}
+                {% if member.is_online %}
+                  <span style="font-size:10px;color:var(--green);margin-left:4px;">● online</span>
+                {% endif %}
+              </span>
             </div>
-            <span>{{ member.username }}</span>
-          </a>
+          {% else %}
+           
+            <a href="{% url 'chat:dm' member.username %}" class="user-item">
+              <div class="user-item-avatar">
+                {{ member.username|first|upper }}
+                <span class="user-status-dot {% if member.is_online %}online{% else %}offline{% endif %}"></span>
+              </div>
+              <span>{{ member.username }}</span>
+            </a>
+          {% endif %}
         {% endif %}
       {% endfor %}
+
     </div>
   </aside>
+  {% endif %}
 
 </div>
 
-{# Toasts #}
 <div id="toastContainer"></div>
 
-{# JS Config #}
 <script>
   const ROOM_SLUG    = "{{ room.slug }}";
   const CURRENT_USER = "{{ request.user.username }}";

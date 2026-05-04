@@ -38,7 +38,7 @@
   background: linear-gradient(135deg,#1a3a5c 0%,#1c2733 100%);
   border: 1px solid rgba(44,165,224,0.35); border-radius: 20px;
   padding: 24px 24px 20px; margin-bottom: 16px;
-  display: flex; align-items: center; gap: 18px; cursor: pointer;
+  display: flex; align-items: center; gap: 18px;
   transition: all 0.22s; position: relative; overflow: hidden;
   text-decoration: none; color: #f0f4f8;
 }
@@ -73,6 +73,8 @@
 }
 .room-card:hover { border-color: #2ca5e0; transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.3); }
 .room-card:hover::before { opacity: 1; }
+.room-card.private-group { border-color: rgba(168,85,247,0.3); }
+.room-card.private-group:hover { border-color: #a855f7; }
 .room-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .room-icon-wrap { width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 22px; }
 .icon-blue   { background: linear-gradient(135deg, var(--primary), #1a5f8a); }
@@ -83,8 +85,8 @@
 .icon-pink   { background: linear-gradient(135deg, #ec4899, #9d174d); }
 .room-tags { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .room-tag { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
-.tag-active  { background: rgba(77,205,110,0.15); color: var(--green); }
-.tag-private { background: rgba(240,192,64,0.12); color: var(--yellow); }
+.tag-active   { background: rgba(77,205,110,0.15); color: var(--green); }
+.tag-private  { background: rgba(168,85,247,0.15); color: #a855f7; }
 .room-name { font-size: 15px; font-weight: 700; margin: 0; }
 .room-desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0; }
 .room-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 10px; border-top: 1px solid var(--border); }
@@ -103,13 +105,20 @@
 .dm-section { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .dm-section::-webkit-scrollbar { height: 3px; }
 .dm-section::-webkit-scrollbar-thumb { background: #2b3a4d; border-radius: 2px; }
-.dm-card { flex-shrink: 0; background: #1c2733; border: 1px solid #2b3a4d; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-decoration: none; color: #f0f4f8; transition: all 0.2s; min-width: 90px; }
+.dm-card {
+  flex-shrink: 0; background: #1c2733; border: 1px solid #2b3a4d; border-radius: 14px;
+  padding: 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-decoration: none; color: #f0f4f8; transition: all 0.2s; min-width: 90px;
+}
 .dm-card:hover { border-color: #2ca5e0; background: #1a2a3a; }
+.dm-card.new-dm { border-style: dashed; opacity: 0.75; }
+.dm-card.new-dm:hover { opacity: 1; border-color: var(--primary); border-style: solid; }
 .dm-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #fff; position: relative; }
 .dm-status { position: absolute; bottom: 0; right: 0; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #1c2733; }
 .online  { background: #4dcd6e; }
 .offline { background: #7b9ab0; }
 .dm-name { font-size: 12px; font-weight: 600; color: #c5d1de; text-align: center; }
+.dm-label { font-size: 10px; color: var(--muted); }
 </style>
 {% endblock %}
 
@@ -119,7 +128,7 @@
   <div class="hero">
     <div class="hero-badge">
       <span class="hero-badge-dot"></span>
-      {{ online_count|default:"4" }} member{% if online_count|default:"4" != "1" %}s{% endif %} online
+      {{ online_count|default:"0" }} member{% if online_count != 1 %}s{% endif %} online
     </div>
     <h1>Welcome to <span>NexaChat</span></h1>
     <p>Choose a room and start chatting in real-time with your team.</p>
@@ -129,11 +138,11 @@
         <div class="stat-label">Active Rooms</div>
       </div>
       <div class="stat">
-        <div class="stat-num">{{ online_count|default:"4" }}</div>
+        <div class="stat-num">{{ online_count|default:"0" }}</div>
         <div class="stat-label">Online Now</div>
       </div>
       <div class="stat">
-        <div class="stat-num">{{ messages_today|default:"128" }}</div>
+        <div class="stat-num">{{ messages_today|default:"0" }}</div>
         <div class="stat-label">Messages Today</div>
       </div>
     </div>
@@ -141,6 +150,7 @@
 
   <div class="index-section">
 
+    
     {% with rooms.first as featured %}
     {% if featured %}
     <div class="section-header">
@@ -160,6 +170,7 @@
     {% endif %}
     {% endwith %}
 
+    
     <div class="section-header" style="margin-top:8px;">
       <div class="section-title">All Rooms</div>
       <span style="font-size:12px;color:var(--muted);">{{ rooms.count }} room{% if rooms.count != 1 %}s{% endif %}</span>
@@ -167,35 +178,34 @@
 
     <div class="rooms-grid">
       {% for room in rooms %}
-        {% cycle 'icon-blue' 'icon-red' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as icon_class silent %}
-        {% cycle '💬' '🔥' '🛠️' '🔒' '🎯' '🌟' as room_icon silent %}
-        <a href="{% url 'chat:room' room.slug %}" class="room-card">
-          <div class="room-top">
-            <div class="room-icon-wrap {{ icon_class }}">{{ room_icon }}</div>
-            <div class="room-tags">
-              {% if room.is_private %}
-                <span class="room-tag tag-private">Private</span>
-              {% else %}
+        
+        {% if not room.is_private %}
+          {% cycle 'icon-blue' 'icon-red' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as icon_class silent %}
+          {% cycle '💬' '🔥' '🛠️' '🎯' '🌟' '⚡' as room_icon silent %}
+          <a href="{% url 'chat:room' room.slug %}" class="room-card">
+            <div class="room-top">
+              <div class="room-icon-wrap {{ icon_class }}">{{ room_icon }}</div>
+              <div class="room-tags">
                 <span class="room-tag tag-active">Active</span>
-              {% endif %}
-            </div>
-          </div>
-          <div>
-            <p class="room-name"># {{ room.name }}</p>
-            <p class="room-desc">{{ room.description|default:"Start chatting..." }}</p>
-          </div>
-          <div class="room-footer">
-            <div class="room-members">
-              <div class="member-dots">
-                {% for member in room.members.all|slice:":3" %}
-                  <div class="member-dot md{{ forloop.counter }}">{{ member.username|first|upper }}</div>
-                {% endfor %}
               </div>
-              {{ room.members.count }} member{% if room.members.count != 1 %}s{% endif %}
             </div>
-            <span class="room-arrow">→</span>
-          </div>
-        </a>
+            <div>
+              <p class="room-name"># {{ room.name }}</p>
+              <p class="room-desc">{{ room.description|default:"Start chatting..." }}</p>
+            </div>
+            <div class="room-footer">
+              <div class="room-members">
+                <div class="member-dots">
+                  {% for member in room.members.all|slice:":3" %}
+                    <div class="member-dot md{{ forloop.counter }}">{{ member.username|first|upper }}</div>
+                  {% endfor %}
+                </div>
+                {{ room.members.count }} member{% if room.members.count != 1 %}s{% endif %}
+              </div>
+              <span class="room-arrow">→</span>
+            </div>
+          </a>
+        {% endif %}
       {% empty %}
         <div class="empty-state">
           <div style="font-size:36px;">💬</div>
@@ -205,26 +215,77 @@
       {% endfor %}
     </div>
 
+
+    {% if my_private_groups %}
+    <div class="section-header" style="margin-top:32px;">
+      <div class="section-title">My Private Groups</div>
+      <span style="font-size:12px;color:var(--muted);">Only you and members can see these</span>
+    </div>
+    <div class="rooms-grid">
+      {% for proom in my_private_groups %}
+        <a href="{% url 'chat:room' proom.slug %}" class="room-card private-group">
+          <div class="room-top">
+            <div class="room-icon-wrap icon-purple">🔒</div>
+            <div class="room-tags">
+              <span class="room-tag tag-private">Private</span>
+            </div>
+          </div>
+          <div>
+            <p class="room-name">🔒 {{ proom.name }}</p>
+            <p class="room-desc">{{ proom.description|default:"Private group chat" }}</p>
+          </div>
+          <div class="room-footer">
+            <div class="room-members">
+              <div class="member-dots">
+                {% for member in proom.members.all|slice:":3" %}
+                  <div class="member-dot md{{ forloop.counter }}">{{ member.username|first|upper }}</div>
+                {% endfor %}
+              </div>
+              {{ proom.members.count }} member{% if proom.members.count != 1 %}s{% endif %}
+            </div>
+            <span class="room-arrow">→</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    
     {% if request.user.is_authenticated %}
     <div class="section-header" style="margin-top:32px;">
       <div class="section-title">Direct Messages</div>
+      <span style="font-size:12px;color:var(--muted);">Only you can see these</span>
     </div>
     <div class="dm-section">
-      {% cycle 'icon-g' 'icon-r' 'icon-p' 'icon-y' 'icon-gr' as dm_icon_class silent %}
-      {% for u in all_users %}
-        {% if u != request.user %}
-          {% cycle 'icon-g' 'icon-r' 'icon-p' 'icon-y' 'icon-gr' as dm_icon_class silent %}
-          <a href="{% url 'chat:dm' u.username %}" class="dm-card">
-            <div class="dm-avatar {{ dm_icon_class }}">
-              {{ u.username|first|upper }}
-              <span class="dm-status {% if u.is_online %}online{% else %}offline{% endif %}"></span>
-            </div>
-            <div class="dm-name">{{ u.username }}</div>
-          </a>
-        {% endif %}
-      {% empty %}
-        <p style="font-size:13px;color:#7b9ab0;">No other users yet.</p>
+
+      {% for dm in dm_list %}
+        {% cycle 'icon-blue' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as dm_color silent %}
+        <a href="{% url 'chat:room' dm.room.slug %}" class="dm-card">
+          <div class="dm-avatar {{ dm_color }}">
+            {{ dm.other_user.username|first|upper }}
+            <span class="dm-status {% if dm.other_user.is_online %}online{% else %}offline{% endif %}"></span>
+          </div>
+          <div class="dm-name">{{ dm.other_user.username }}</div>
+          <div class="dm-label">Open chat</div>
+        </a>
       {% endfor %}
+
+      {% for u in other_users %}
+        {% cycle 'icon-red' 'icon-blue' 'icon-purple' 'icon-green' as new_color silent %}
+        <a href="{% url 'chat:dm' u.username %}" class="dm-card new-dm">
+          <div class="dm-avatar {{ new_color }}">
+            {{ u.username|first|upper }}
+            <span class="dm-status {% if u.is_online %}online{% else %}offline{% endif %}"></span>
+          </div>
+          <div class="dm-name">{{ u.username }}</div>
+          <div class="dm-label">Start chat</div>
+        </a>
+      {% endfor %}
+
+      {% if not dm_list and not other_users %}
+        <p style="font-size:13px;color:#7b9ab0;">No other users yet.</p>
+      {% endif %}
+
     </div>
     {% endif %}
 

@@ -15,6 +15,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
+       
+        is_allowed = await self.check_room_access()
+        if not is_allowed:
+            await self.close()
+            return
+
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
         await self.set_user_online(True)
@@ -37,10 +43,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if hasattr(self, 'user') and self.user.is_authenticated:
             await self.set_user_online(False)
             count = await self.get_online_count()
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {'type': 'online_count', 'count': count}
-            )
+            if hasattr(self, 'room_group_name'):
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {'type': 'online_count', 'count': count}
+                )
 
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -73,7 +80,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
             return
 
-       
         if event_type == 'file_message':
             file_url   = data.get('file_url', '')
             file_type  = data.get('file_type', 'file')
@@ -84,13 +90,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
-                    'type':      'chat_message',
-                    'message':   file_name,
-                    'username':  self.user.username,
-                    'timestamp': timestamp,
+                    'type':       'chat_message',
+                    'message':    file_name,
+                    'username':   self.user.username,
+                    'timestamp':  timestamp,
                     'message_id': message_id,
-                    'file_url':  file_url,
-                    'file_type': file_type,
+                    'file_url':   file_url,
+                    'file_type':  file_type,
                 }
             )
             return
@@ -107,17 +113,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_send(
             self.room_group_name,
             {
-                'type':      'chat_message',
-                'message':   message_content,
-                'username':  self.user.username,
-                'timestamp': message.timestamp.strftime('%H:%M'),
+                'type':       'chat_message',
+                'message':    message_content,
+                'username':   self.user.username,
+                'timestamp':  message.timestamp.strftime('%H:%M'),
                 'message_id': message.id,
-                'file_url':  None,
-                'file_type': None,
+                'file_url':   None,
+                'file_type':  None,
             }
         )
 
-    # ── Handlers → send to individual client ──
+    # ── Handlers ──────────────────────────────
 
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
@@ -157,7 +163,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'username':   event['username'],
         }))
 
-    # ── DB helpers ────────────────────────────
+    # ── DB Helpers ────────────────────────────
+
+    @database_sync_to_async
+    def check_room_access(self):
+        
+        try:
+            room = Room.objects.get(slug=self.room_slug)
+            if room.is_private:
+                return room.members.filter(id=self.user.id).exists()
+            return True
+        except Room.DoesNotExist:
+            return False
 
     @database_sync_to_async
     def get_online_count(self):
