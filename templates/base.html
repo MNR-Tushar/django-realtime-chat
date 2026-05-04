@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="bn" id="htmlRoot">
+<html lang="en" id="htmlRoot">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Django Chat{% endblock %}</title>
   {% load static %}
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <link rel="stylesheet" href="{% static 'css/additions.css' %}">
   {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -17,10 +18,15 @@
   </div>
   <div class="nav-links">
     {% if user.is_authenticated %}
-      <span class="nav-user">
-        <div class="nav-avatar-sm">{{ user.username|first|upper }}</div>
+      <a href="{% url 'profile' %}" class="nav-user" style="text-decoration:none;cursor:pointer;" title="My Profile">
+        {% if user.avatar %}
+          <img src="{{ user.avatar.url }}" alt="{{ user.username }}"
+               style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);">
+        {% else %}
+          <div class="nav-avatar-sm">{{ user.username|first|upper }}</div>
+        {% endif %}
         {{ user.username }}
-      </span>
+      </a>
       <form method="POST" action="{% url 'logout' %}" style="display:inline;">
         {% csrf_token %}
         <button type="submit" class="btn btn-sm">Logout</button>

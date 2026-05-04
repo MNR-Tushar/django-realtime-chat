@@ -1,0 +1,146 @@
+/* ═══════════════════════════════════════════════
+   ADDITIONS: Message Edit / Delete / Profile
+═══════════════════════════════════════════════ */
+
+/* ── Message Action Buttons (edit / delete) ── */
+.msg-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.18s;
+  margin-left: 4px;
+}
+.message:hover .msg-actions { opacity: 1; }
+
+.msg-action-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition: background 0.15s, transform 0.15s;
+  color: var(--muted);
+}
+.msg-action-btn:hover {
+  background: var(--surface2);
+  transform: scale(1.15);
+}
+.msg-action-btn.delete-btn:hover {
+  background: rgba(240,84,84,0.12);
+  color: var(--red);
+}
+.msg-action-btn.edit-btn:hover {
+  background: var(--primary-glow);
+  color: var(--primary);
+}
+
+/* ── Edited badge ── */
+.edited-badge {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  margin-left: 2px;
+  opacity: 0.75;
+}
+
+/* ── Inline edit textarea inside bubble ── */
+.msg-edit-input {
+  background: rgba(255,255,255,0.08);
+  border: 1.5px solid var(--primary);
+  border-radius: 10px;
+  color: inherit;
+  font-size: 14.5px;
+  font-family: 'DM Sans', sans-serif;
+  line-height: 1.55;
+  outline: none;
+  padding: 6px 10px;
+  resize: none;
+  width: 100%;
+  min-width: 180px;
+  box-shadow: 0 0 0 3px var(--primary-glow);
+  transition: box-shadow 0.2s;
+}
+.message:not(.own) .msg-edit-input {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+/* ── Edit bar (shown above input while editing) ── */
+#editBar {
+  background: rgba(44,165,224,0.10);
+  border-top: 1px solid rgba(44,165,224,0.3);
+  padding: 0;
+}
+.edit-bar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 20px;
+  font-size: 12.5px;
+  color: var(--primary);
+  font-weight: 500;
+}
+.edit-bar-cancel {
+  background: transparent;
+  border: 1px solid rgba(44,165,224,0.3);
+  border-radius: 8px;
+  color: var(--primary);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s;
+}
+.edit-bar-cancel:hover { background: rgba(44,165,224,0.12); }
+
+/* ── Delete Confirm Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.18s ease;
+}
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px 28px 24px;
+  max-width: 360px;
+  width: 90%;
+  text-align: center;
+  box-shadow: var(--shadow);
+  animation: modalSlide 0.22s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes modalSlide {
+  from { opacity:0; transform:scale(0.92) translateY(10px); }
+  to   { opacity:1; transform:scale(1) translateY(0); }
+}
+.modal-icon { font-size: 38px; margin-bottom: 12px; }
+.modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.modal-body {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin-bottom: 24px;
+}
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.modal-actions .btn { min-width: 100px; justify-content: center; }

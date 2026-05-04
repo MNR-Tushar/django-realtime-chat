@@ -2,7 +2,8 @@
    TELEGRAM-STYLE CHAT.JS
    Features: Emoji picker, Reactions, Sound,
              Dark/Light mode, User sidebar,
-             Auto-resize textarea
+             Auto-resize textarea,
+             Message Edit + Delete
 ═══════════════════════════════════════════════ */
 
 // ── DOM Elements ──────────────────────────────
@@ -20,15 +21,22 @@ const soundBtn       = document.getElementById('soundBtn');
 const usersSidebarEl = document.getElementById('usersSidebar');
 const usersBtn       = document.getElementById('usersBtn');
 const onlineCountEl  = document.getElementById('onlineCount');
+const editBar        = document.getElementById('editBar');
 
 // ── State ─────────────────────────────────────
 let socket;
-let unreadCount = 0;
-let soundEnabled = true;
+let unreadCount   = 0;
+let soundEnabled  = true;
 let emojiPickerOpen = false;
 let reactionPickerTarget = null;
 let currentReactionPicker = null;
-const messageReactions = {}; // { messageId: { emoji: [username,...] } }
+const messageReactions = {};
+
+// Edit state
+let editingMessageId = null;
+
+// Delete state
+let pendingDeleteId = null;
 
 // ── Theme ─────────────────────────────────────
 const savedTheme = localStorage.getItem('chat-theme') || 'dark';
@@ -136,7 +144,6 @@ function createEmojiPicker() {
   `;
 
   document.querySelector('.chat-input-area')?.parentElement?.appendChild(picker);
-
   renderEmojiGrid(picker);
 
   picker.querySelectorAll('.emoji-tab').forEach(btn => {
@@ -160,13 +167,6 @@ function createEmojiPicker() {
 
 function renderEmojiGrid(picker) {
   const grid = picker.querySelector('#emojiGrid');
-  const emojis = emojiSearchQuery
-    ? Object.values(EMOJI_CATEGORIES).flat().filter((_, i, arr) => {
-        const all = Object.values(EMOJI_CATEGORIES).flat();
-        return true;
-      }).filter(e => e.includes(emojiSearchQuery) || emojiSearchQuery === '')
-    : EMOJI_CATEGORIES[currentEmojiCategory];
-
   const filtered = emojiSearchQuery
     ? Object.values(EMOJI_CATEGORIES).flat().filter((e, i, arr) => arr.indexOf(e) === i)
     : EMOJI_CATEGORIES[currentEmojiCategory];
@@ -189,12 +189,8 @@ function renderEmojiGrid(picker) {
 
 function toggleEmojiPicker() {
   const existing = document.getElementById('emojiPicker');
-  if (existing) {
-    closeEmojiPicker();
-  } else {
-    emojiPickerOpen = true;
-    createEmojiPicker();
-  }
+  if (existing) closeEmojiPicker();
+  else { emojiPickerOpen = true; createEmojiPicker(); }
 }
 
 function closeEmojiPicker() {
@@ -224,7 +220,6 @@ const QUICK_REACTIONS = ['👍','❤️','😂','😮','😢','🔥','👏','�
 
 function showReactionPicker(triggerEl, messageId) {
   closeReactionPicker();
-
   const picker = document.createElement('div');
   picker.className = 'reaction-picker';
   picker.innerHTML = QUICK_REACTIONS.map(e =>
@@ -232,12 +227,7 @@ function showReactionPicker(triggerEl, messageId) {
   ).join('');
 
   const rect = triggerEl.getBoundingClientRect();
-  picker.style.cssText = `
-    position: fixed;
-    top: ${rect.top - 60}px;
-    left: ${rect.left - 60}px;
-  `;
-
+  picker.style.cssText = `position:fixed;top:${rect.top - 60}px;left:${rect.left - 60}px;`;
   document.body.appendChild(picker);
   currentReactionPicker = picker;
 
@@ -250,48 +240,167 @@ function showReactionPicker(triggerEl, messageId) {
 }
 
 function closeReactionPicker() {
-  if (currentReactionPicker) {
-    currentReactionPicker.remove();
-    currentReactionPicker = null;
-  }
+  if (currentReactionPicker) { currentReactionPicker.remove(); currentReactionPicker = null; }
 }
 
 function toggleReaction(messageId, emoji) {
   if (!messageReactions[messageId]) messageReactions[messageId] = {};
   const r = messageReactions[messageId];
   if (!r[emoji]) r[emoji] = [];
-
   const idx = r[emoji].indexOf(CURRENT_USER);
-  if (idx === -1) {
-    r[emoji].push(CURRENT_USER);
-  } else {
-    r[emoji].splice(idx, 1);
-    if (r[emoji].length === 0) delete r[emoji];
-  }
+  if (idx === -1) r[emoji].push(CURRENT_USER);
+  else { r[emoji].splice(idx, 1); if (r[emoji].length === 0) delete r[emoji]; }
   renderReactions(messageId);
 }
 
 function renderReactions(messageId) {
   const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
   if (!msgEl) return;
-
   let reactEl = msgEl.querySelector('.message-reactions');
   if (!reactEl) {
     reactEl = document.createElement('div');
     reactEl.className = 'message-reactions';
     msgEl.querySelector('.message-footer')?.before(reactEl);
   }
-
   const reactions = messageReactions[messageId] || {};
   reactEl.innerHTML = Object.entries(reactions).map(([emoji, users]) => {
     const mine = users.includes(CURRENT_USER);
-    return `<span class="reaction-pill ${mine ? 'mine' : ''}" 
+    return `<span class="reaction-pill ${mine ? 'mine' : ''}"
                   onclick="toggleReaction('${messageId}','${emoji}')"
                   title="${users.join(', ')}">
               ${emoji} <span class="reaction-count">${users.length}</span>
             </span>`;
   }).join('');
 }
+
+// ── Edit Message ──────────────────────────────
+function startEdit(messageId) {
+  // If already editing another, cancel first
+  if (editingMessageId && editingMessageId !== messageId) cancelEdit();
+
+  editingMessageId = messageId;
+  const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!msgEl) return;
+
+  const bubble = msgEl.querySelector('.message-bubble');
+  const textSpan = bubble.querySelector('.msg-text');
+  if (!textSpan) return; // files can't be edited
+
+  const originalText = textSpan.textContent;
+
+  // Replace text span with editable textarea
+  const editArea = document.createElement('textarea');
+  editArea.className = 'msg-edit-input';
+  editArea.value = originalText;
+  editArea.dataset.originalText = originalText;
+  editArea.rows = 1;
+  textSpan.replaceWith(editArea);
+
+  // Auto-size
+  editArea.style.height = 'auto';
+  editArea.style.height = Math.min(editArea.scrollHeight, 120) + 'px';
+  editArea.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+
+  editArea.focus();
+  editArea.setSelectionRange(editArea.value.length, editArea.value.length);
+
+  // Keyboard shortcuts inside edit area
+  editArea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submitEdit(messageId);
+    }
+    if (e.key === 'Escape') {
+      cancelEdit();
+    }
+  });
+
+  // Show edit bar
+  if (editBar) {
+    editBar.style.display = 'block';
+  }
+
+  // Swap send button to save button
+  sendBtn.textContent = '✓';
+  sendBtn.title = 'Save edit (Enter)';
+  sendBtn._editMode = true;
+}
+
+function submitEdit(messageId) {
+  const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!msgEl) return;
+  const editArea = msgEl.querySelector('.msg-edit-input');
+  if (!editArea) return;
+
+  const newContent = editArea.value.trim();
+  if (!newContent) return;
+
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({
+      type: 'edit_message',
+      message_id: messageId,
+      content: newContent,
+    }));
+  }
+
+  cancelEdit();
+}
+
+function cancelEdit() {
+  if (!editingMessageId) return;
+  const msgEl = document.querySelector(`[data-message-id="${editingMessageId}"]`);
+  if (msgEl) {
+    const editArea = msgEl.querySelector('.msg-edit-input');
+    if (editArea) {
+      const span = document.createElement('span');
+      span.className = 'msg-text';
+      span.textContent = editArea.dataset.originalText;
+      editArea.replaceWith(span);
+    }
+  }
+
+  editingMessageId = null;
+  if (editBar) editBar.style.display = 'none';
+  sendBtn.textContent = '➤';
+  sendBtn.title = 'Send';
+  sendBtn._editMode = false;
+}
+
+// ── Delete Message ────────────────────────────
+function confirmDelete(messageId) {
+  pendingDeleteId = messageId;
+  document.getElementById('deleteModal').style.display = 'flex';
+}
+
+function closeDeleteModal(event) {
+  if (event && event.target !== document.getElementById('deleteModal')) return;
+  document.getElementById('deleteModal').style.display = 'none';
+  pendingDeleteId = null;
+}
+
+function executeDelete() {
+  if (!pendingDeleteId) return;
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({
+      type: 'delete_message',
+      message_id: pendingDeleteId,
+    }));
+  }
+  document.getElementById('deleteModal').style.display = 'none';
+  pendingDeleteId = null;
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.getElementById('deleteModal').style.display = 'none';
+    pendingDeleteId = null;
+    if (editingMessageId) cancelEdit();
+  }
+});
 
 // ── WebSocket ─────────────────────────────────
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -352,7 +461,66 @@ function bindSocketEvents(ws) {
       const el = document.querySelector(`[data-message-id="${data.message_id}"] .read-badge`);
       if (el) el.textContent = '✓✓';
     }
+    else if (data.type === 'message_deleted') {
+      handleMessageDeleted(data.message_id);
+    }
+    else if (data.type === 'message_edited') {
+      handleMessageEdited(data.message_id, data.content);
+    }
   };
+}
+
+// ── Handle Incoming Delete ────────────────────
+function handleMessageDeleted(messageId) {
+  const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!msgEl) return;
+
+  msgEl.style.transition = 'opacity 0.3s, transform 0.3s';
+  msgEl.style.opacity    = '0';
+  msgEl.style.transform  = 'scale(0.9)';
+  setTimeout(() => msgEl.remove(), 320);
+}
+
+// ── Handle Incoming Edit ──────────────────────
+function handleMessageEdited(messageId, newContent) {
+  const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!msgEl) return;
+
+  // If this message is currently being edited by us, cancel edit UI first
+  if (editingMessageId === messageId) {
+    cancelEdit();
+    // re-query after cancel
+    const freshEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!freshEl) return;
+    const textSpan = freshEl.querySelector('.msg-text');
+    if (textSpan) textSpan.textContent = newContent;
+    addOrUpdateEditedBadge(freshEl);
+    return;
+  }
+
+  const textSpan = msgEl.querySelector('.msg-text');
+  if (textSpan) {
+    textSpan.textContent = newContent;
+    // Flash animation
+    textSpan.style.transition = 'background 0.4s';
+    textSpan.style.background = 'rgba(44,165,224,0.18)';
+    textSpan.style.borderRadius = '4px';
+    setTimeout(() => { textSpan.style.background = ''; }, 800);
+  }
+  addOrUpdateEditedBadge(msgEl);
+}
+
+function addOrUpdateEditedBadge(msgEl) {
+  const footer = msgEl.querySelector('.message-footer');
+  if (!footer) return;
+  if (!footer.querySelector('.edited-badge')) {
+    const badge = document.createElement('span');
+    badge.className = 'edited-badge';
+    badge.textContent = 'edited';
+    const timeEl = footer.querySelector('.message-time');
+    if (timeEl) timeEl.after(badge);
+    else footer.prepend(badge);
+  }
 }
 
 function createSocket() {
@@ -381,16 +549,20 @@ function updateTypingDisplay() {
   } else {
     const names = users.join(', ');
     typingEl.innerHTML = `
-      <div class="typing-dots">
-        <span></span><span></span><span></span>
-      </div>
+      <div class="typing-dots"><span></span><span></span><span></span></div>
       ${escapeHtml(names)} ${users.length === 1 ? 'is typing' : 'are typing'}...
     `;
   }
 }
 
-// ── Text Message ──────────────────────────────
+// ── Text Message / Edit Send ──────────────────
 function sendMessage() {
+  // If in edit mode, save edit instead
+  if (editingMessageId && sendBtn._editMode) {
+    submitEdit(editingMessageId);
+    return;
+  }
+
   const content = messageInput.value.trim();
   if (!content || !socket || socket.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify({ message: content }));
@@ -442,10 +614,9 @@ function openFilePicker() {
         throw new Error(err.error || 'Upload failed');
       }
       const data = await res.json();
-
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
-          type:       'file_message',
+          type: 'file_message',
           file_url:   data.url,
           file_type:  data.file_type,
           file_name:  file.name,
@@ -463,21 +634,19 @@ function openFilePicker() {
   input.click();
 }
 
-if (attachBtn) {
-  attachBtn.addEventListener('click', openFilePicker);
-}
+if (attachBtn) attachBtn.addEventListener('click', openFilePicker);
 
 // ── Render Message ────────────────────────────
 let lastAuthor = null;
-let lastMsgTime = null;
 
-function appendMessage({ content, username, timestamp, messageId, fileUrl, fileType, own }) {
+function appendMessage({ content, username, timestamp, messageId, fileUrl, fileType, own, isEdited }) {
   const isGrouped = username === lastAuthor;
   lastAuthor = username;
 
   const div = document.createElement('div');
   div.className = `message ${own ? 'own' : ''} ${isGrouped ? 'grouped' : ''}`;
   div.setAttribute('data-message-id', messageId);
+  div.setAttribute('data-is-own', own ? 'true' : 'false');
 
   let bubbleInner = '';
   if (fileUrl) {
@@ -488,8 +657,21 @@ function appendMessage({ content, username, timestamp, messageId, fileUrl, fileT
       bubbleInner = `<a href="${fileUrl}" class="msg-file" download>📎 ${escapeHtml(content)}</a>`;
     }
   } else {
-    bubbleInner = escapeHtml(content);
+    bubbleInner = `<span class="msg-text">${escapeHtml(content)}</span>`;
   }
+
+  const editedBadge = isEdited ? '<span class="edited-badge">edited</span>' : '';
+  const ownActions = own && !fileUrl ? `
+    <span class="msg-actions">
+      <button class="msg-action-btn edit-btn"
+              onclick="startEdit('${messageId}')" title="Edit">✏️</button>
+      <button class="msg-action-btn delete-btn"
+              onclick="confirmDelete('${messageId}')" title="Delete">🗑️</button>
+    </span>` : own ? `
+    <span class="msg-actions">
+      <button class="msg-action-btn delete-btn"
+              onclick="confirmDelete('${messageId}')" title="Delete">🗑️</button>
+    </span>` : '';
 
   div.innerHTML = `
     <div class="message-author">${escapeHtml(username)}</div>
@@ -499,7 +681,9 @@ function appendMessage({ content, username, timestamp, messageId, fileUrl, fileT
     </div>
     <div class="message-footer">
       <span class="message-time">${timestamp}</span>
+      ${editedBadge}
       ${own ? '<span class="read-badge">✓</span>' : ''}
+      ${ownActions}
     </div>
   `;
 

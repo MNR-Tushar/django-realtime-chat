@@ -16,7 +16,6 @@ class Room(models.Model):
 
     @classmethod
     def get_or_create_private(cls, user1, user2):
-       
         rooms = cls.objects.filter(
             is_private=True,
             members=user1
@@ -27,7 +26,6 @@ class Room(models.Model):
 
         slug = f'dm-{min(user1.id, user2.id)}-{max(user1.id, user2.id)}'
 
-      
         room, created = cls.objects.get_or_create(
             slug=slug,
             defaults={
@@ -61,6 +59,7 @@ class Message(models.Model):
     content = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
+    is_edited = models.BooleanField(default=False)
 
     file = models.FileField(upload_to='chat_files/%Y/%m/', null=True, blank=True)
     file_type = models.CharField(

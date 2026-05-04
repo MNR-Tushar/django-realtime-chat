@@ -16,18 +16,15 @@
     </div>
     <div class="room-list" id="roomList">
       {% if room.is_private %}
-      
         <a href="{% url 'chat:room' room.slug %}" class="room-item active">
           <div class="room-avatar">🔒</div>
           <div class="room-meta">
             <div class="room-name">
               {% if room.slug|slice:":3" == "dm-" %}
-               
                 {% for member in room.members.all %}
                   {% if member != request.user %}{{ member.username }}{% endif %}
                 {% endfor %}
               {% else %}
-                {# Private group — room name #}
                 {{ room.name }}
               {% endif %}
             </div>
@@ -61,13 +58,11 @@
         <h2>
           {% if room.is_private %}
             {% if room.slug|slice:":3" == "dm-" %}
-            
               {% for member in room.members.all %}
                 {% if member != request.user %}{{ member.username }}{% endif %}
               {% endfor %}
               <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px;">Private Chat</span>
             {% else %}
-              {# Private Group #}
               🔒 {{ room.name }}
               <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px;">Private Group</span>
             {% endif %}
@@ -86,7 +81,6 @@
         <button id="notifBtn" class="icon-btn" title="Notifications">🔔</button>
         <button id="soundBtn" class="icon-btn" title="Sound">🔊</button>
         <button id="themeBtn" class="icon-btn theme-toggle" title="Toggle Theme">🌙</button>
-       
         {% if not room.slug|slice:":3" == "dm-" %}
           <button id="usersBtn" class="icon-btn" title="Members">👥</button>
         {% endif %}
@@ -115,7 +109,8 @@
 
       {% for message in messages %}
         <div class="message {% if message.author == request.user %}own{% endif %}"
-             data-message-id="{{ message.id }}">
+             data-message-id="{{ message.id }}"
+             data-is-own="{% if message.author == request.user %}true{% else %}false{% endif %}">
           <div class="message-author">{{ message.author.username }}</div>
           <div class="message-bubble">
             {% if message.file %}
@@ -128,7 +123,7 @@
                 </a>
               {% endif %}
             {% else %}
-              {{ message.content }}
+              <span class="msg-text">{{ message.content }}</span>
             {% endif %}
             <span class="reaction-trigger"
                   onclick="showReactionPicker(this, '{{ message.id }}')"
@@ -136,8 +131,20 @@
           </div>
           <div class="message-footer">
             <span class="message-time">{{ message.timestamp|date:"H:i" }}</span>
+            {% if message.is_edited %}
+              <span class="edited-badge">edited</span>
+            {% endif %}
             {% if message.author == request.user %}
               <span class="read-badge">{% if message.is_read %}✓✓{% else %}✓{% endif %}</span>
+              {# Edit / Delete actions #}
+              <span class="msg-actions">
+                <button class="msg-action-btn edit-btn"
+                        onclick="startEdit('{{ message.id }}')"
+                        title="Edit message">✏️</button>
+                <button class="msg-action-btn delete-btn"
+                        onclick="confirmDelete('{{ message.id }}')"
+                        title="Delete message">🗑️</button>
+              </span>
             {% endif %}
           </div>
         </div>
@@ -164,10 +171,31 @@
       <button id="sendBtn" title="Send">➤</button>
     </div>
 
+    {# ── Edit Mode Bar (hidden by default) ── #}
+    <div id="editBar" style="display:none;">
+      <div class="edit-bar-inner">
+        <span class="edit-bar-label">✏️ Editing message</span>
+        <button class="edit-bar-cancel" onclick="cancelEdit()">✕ Cancel</button>
+      </div>
+    </div>
+
+    {# ── Delete Confirm Modal ── #}
+    <div id="deleteModal" class="modal-overlay" style="display:none;" onclick="closeDeleteModal(event)">
+      <div class="modal-box">
+        <div class="modal-icon">🗑️</div>
+        <h3 class="modal-title">Delete Message?</h3>
+        <p class="modal-body">This message will be permanently removed for everyone in the room.</p>
+        <div class="modal-actions">
+          <button class="btn" onclick="closeDeleteModal()">Cancel</button>
+          <button class="btn" style="background:var(--red);border-color:var(--red);color:#fff;"
+                  onclick="executeDelete()">Delete</button>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   {# ─── RIGHT SIDEBAR ─── #}
- 
   {% if not room.slug|slice:":3" == "dm-" %}
   <aside class="users-sidebar" id="usersSidebar">
     <div class="users-sidebar-header">
@@ -175,8 +203,6 @@
       {% if room.is_private %}Private Members{% else %}Members{% endif %}
     </div>
     <div class="user-list" id="userList">
-
-  
       <div class="user-item">
         <div class="user-item-avatar">
           {{ request.user.username|first|upper }}
@@ -185,11 +211,9 @@
         <span>{{ request.user.username }} <span style="font-size:11px;color:var(--muted);">(You)</span></span>
       </div>
 
-      {# Room members #}
       {% for member in room.members.all %}
         {% if member != request.user %}
           {% if room.is_private %}
-           
             <div class="user-item">
               <div class="user-item-avatar">
                 {{ member.username|first|upper }}
@@ -203,7 +227,6 @@
               </span>
             </div>
           {% else %}
-           
             <a href="{% url 'chat:dm' member.username %}" class="user-item">
               <div class="user-item-avatar">
                 {{ member.username|first|upper }}
@@ -214,7 +237,6 @@
           {% endif %}
         {% endif %}
       {% endfor %}
-
     </div>
   </aside>
   {% endif %}

@@ -15,7 +15,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-       
         is_allowed = await self.check_room_access()
         if not is_allowed:
             await self.close()
@@ -101,6 +100,38 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
             return
 
+        # ── Delete message ──────────────────────────────
+        if event_type == 'delete_message':
+            message_id = data.get('message_id')
+            deleted = await self.delete_message(message_id)
+            if deleted:
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type':       'message_deleted',
+                        'message_id': message_id,
+                    }
+                )
+            return
+
+        # ── Edit message ────────────────────────────────
+        if event_type == 'edit_message':
+            message_id = data.get('message_id')
+            new_content = data.get('content', '').strip()
+            if not new_content:
+                return
+            edited = await self.edit_message(message_id, new_content)
+            if edited:
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type':       'message_edited',
+                        'message_id': message_id,
+                        'content':    new_content,
+                    }
+                )
+            return
+
         # Regular text message
         message_content = data.get('message', '').strip()
         if not message_content:
@@ -163,11 +194,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'username':   event['username'],
         }))
 
+    async def message_deleted(self, event):
+        await self.send(text_data=json.dumps({
+            'type':       'message_deleted',
+            'message_id': event['message_id'],
+        }))
+
+    async def message_edited(self, event):
+        await self.send(text_data=json.dumps({
+            'type':       'message_edited',
+            'message_id': event['message_id'],
+            'content':    event['content'],
+        }))
+
     # ── DB Helpers ────────────────────────────
 
     @database_sync_to_async
     def check_room_access(self):
-        
         try:
             room = Room.objects.get(slug=self.room_slug)
             if room.is_private:
@@ -211,3 +254,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def set_user_online(self, status):
         self.user.is_online = status
         self.user.save(update_fields=['is_online'])
+
+    @database_sync_to_async
+    def delete_message(self, message_id):
+        """Delete a message only if the current user is the author."""
+        try:
+            msg = Message.objects.get(id=message_id, author=self.user)
+            msg.delete()
+            return True
+        except Message.DoesNotExist:
+            return False
+
+    @database_sync_to_async
+    def edit_message(self, message_id, new_content):
+        """Edit a message only if the current user is the author."""
+        try:
+            msg = Message.objects.get(id=message_id, author=self.user)
+            msg.content = new_content
+            msg.is_edited = True
+            msg.save(update_fields=['content', 'is_edited'])
+            return True
+        except Message.DoesNotExist:
+            return False
