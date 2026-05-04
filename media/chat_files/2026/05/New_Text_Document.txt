@@ -1,7 +1,0 @@
-Hi, I'm a Python backend developer experienced in Django and REST API development. 
-I enjoy building scalable web applications and would love to contribute to your team.
-
-
-Hi, I applied for the Backend role. 
-I’m a Python/Django developer and really interested in your product.
-Would love to discuss how I can contribute.

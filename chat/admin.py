@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Room, Message
+from .models import *
 
 
 @admin.register(Room)
@@ -25,3 +25,12 @@ class MessageAdmin(admin.ModelAdmin):
     list_display = ['author', 'room', 'content', 'timestamp']
     list_filter = ['room', 'timestamp']
     search_fields = ['content', 'author__username']
+    
+@admin.register(JoinRequest)
+class JoinRequestAdmin(admin.ModelAdmin):
+    list_display = ['user', 'room', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['user__username', 'room__name']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user', 'room')

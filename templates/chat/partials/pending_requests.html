@@ -1,0 +1,18 @@
+{% for jr in pending_approvals %}
+<div class="approval-card" id="approval-{{ jr.id }}">
+  <div class="approval-avatar">{{ jr.user.username|first|upper }}</div>
+  <div class="approval-info">
+    <strong>{{ jr.user.username }}</strong>
+    <span>wants to join <em>{{ jr.room.name }}</em></span>
+  </div>
+  <div class="approval-actions">
+    <button class="btn btn-sm btn-primary"
+            onclick="handleJoinRequest({{ jr.id }}, 'approve')">✓ Approve</button>
+    <button class="btn btn-sm"
+            style="border-color:var(--red);color:var(--red);"
+            onclick="handleJoinRequest({{ jr.id }}, 'reject')">✕ Reject</button>
+  </div>
+</div>
+{% empty %}
+<p style="font-size:13px;color:var(--muted);text-align:center;padding:12px 0;">No pending requests.</p>
+{% endfor %}

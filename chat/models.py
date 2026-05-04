@@ -83,3 +83,33 @@ class Message(models.Model):
 
     def __str__(self):
         return f'{self.author.username}: {self.content[:40]}'
+
+
+class JoinRequest(models.Model):
+    """Request to join a private room"""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    room = models.ForeignKey(
+        Room,
+        on_delete=models.CASCADE,
+        related_name='join_requests',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='join_requests',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        unique_together = ('room', 'user')
+
+    def __str__(self):
+        return f'{self.user.username} → {self.room.name} [{self.status}]'
