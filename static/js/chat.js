@@ -3,7 +3,9 @@
    Features: Emoji picker, Reactions, Sound,
              Dark/Light mode, User sidebar,
              Auto-resize textarea,
-             Message Edit + Delete
+             Message Edit + Delete,
+             Message Reply (quoted),
+             Message Search with highlight
 ═══════════════════════════════════════════════ */
 
 // ── DOM Elements ──────────────────────────────
@@ -22,6 +24,18 @@ const usersSidebarEl = document.getElementById('usersSidebar');
 const usersBtn       = document.getElementById('usersBtn');
 const onlineCountEl  = document.getElementById('onlineCount');
 const editBar        = document.getElementById('editBar');
+const replyBar       = document.getElementById('replyBar');
+const replyBarLabel  = document.getElementById('replyBarLabel');
+const replyBarText   = document.getElementById('replyBarText');
+
+// Search elements
+const searchBtn    = document.getElementById('searchBtn');
+const searchPanel  = document.getElementById('searchPanel');
+const searchInput  = document.getElementById('searchInput');
+const searchCount  = document.getElementById('searchCount');
+const searchPrev   = document.getElementById('searchPrev');
+const searchNext   = document.getElementById('searchNext');
+const searchClose  = document.getElementById('searchClose');
 
 // ── State ─────────────────────────────────────
 let socket;
@@ -37,6 +51,15 @@ let editingMessageId = null;
 
 // Delete state
 let pendingDeleteId = null;
+
+// Reply state
+let replyingToId       = null;
+let replyingToUsername = null;
+let replyingToText     = null;
+
+// Search state
+let searchResults  = [];   // [{msgEl, textNode, start, end}] — one entry per match
+let searchCurrent  = -1;   // index into searchResults
 
 // ── Theme ─────────────────────────────────────
 const savedTheme = localStorage.getItem('chat-theme') || 'dark';
@@ -111,6 +134,212 @@ if (usersBtn && usersSidebarEl) {
     usersSidebarEl.classList.toggle('collapsed');
     usersBtn.classList.toggle('active');
   });
+}
+
+// ════════════════════════════════════════════
+//  MESSAGE SEARCH
+// ════════════════════════════════════════════
+
+if (searchBtn) {
+  searchBtn.addEventListener('click', openSearch);
+}
+if (searchClose) {
+  searchClose.addEventListener('click', closeSearch);
+}
+if (searchInput) {
+  searchInput.addEventListener('input', runSearch);
+}
+if (searchPrev) {
+  searchPrev.addEventListener('click', () => navigateSearch(-1));
+}
+if (searchNext) {
+  searchNext.addEventListener('click', () => navigateSearch(1));
+}
+
+// Ctrl+F / Cmd+F shortcut
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    if (searchPanel && searchPanel.classList.contains('open')) {
+      closeSearch();
+    } else {
+      openSearch();
+    }
+  }
+  if (e.key === 'Escape') {
+    if (searchPanel && searchPanel.classList.contains('open')) {
+      closeSearch();
+    }
+    document.getElementById('deleteModal').style.display = 'none';
+    pendingDeleteId = null;
+    if (editingMessageId) cancelEdit();
+    if (replyingToId) cancelReply();
+  }
+});
+
+function openSearch() {
+  if (!searchPanel) return;
+  searchPanel.classList.add('open');
+  searchInput.focus();
+  if (searchBtn) searchBtn.classList.add('active');
+}
+
+function closeSearch() {
+  if (!searchPanel) return;
+  searchPanel.classList.remove('open');
+  clearSearchHighlights();
+  searchResults = [];
+  searchCurrent = -1;
+  updateSearchCount();
+  if (searchBtn) searchBtn.classList.remove('active');
+}
+
+function runSearch() {
+  clearSearchHighlights();
+  searchResults = [];
+  searchCurrent = -1;
+
+  const query = searchInput.value.trim();
+  if (!query) {
+    updateSearchCount();
+    return;
+  }
+
+  // Search through all .msg-text spans
+  const textSpans = chatMessages.querySelectorAll('.msg-text');
+  const re = new RegExp(escapeRegex(query), 'gi');
+
+  textSpans.forEach(span => {
+    const msgEl = span.closest('.message');
+    if (!msgEl) return;
+
+    const originalText = span.textContent;
+    let match;
+    const matches = [];
+    re.lastIndex = 0;
+    while ((match = re.exec(originalText)) !== null) {
+      matches.push({ start: match.index, end: match.index + match[0].length });
+    }
+    if (!matches.length) return;
+
+    // Rebuild span HTML with <mark> tags
+    let html = '';
+    let cursor = 0;
+    matches.forEach((m, i) => {
+      html += escapeHtml(originalText.slice(cursor, m.start));
+      html += `<mark class="search-highlight" data-match-idx="${searchResults.length + i}">${escapeHtml(originalText.slice(m.start, m.end))}</mark>`;
+      cursor = m.end;
+      searchResults.push({ msgEl, span });
+    });
+    html += escapeHtml(originalText.slice(cursor));
+    span.innerHTML = html;
+  });
+
+  if (searchResults.length > 0) {
+    searchCurrent = 0;
+    highlightCurrent();
+  }
+  updateSearchCount();
+}
+
+function navigateSearch(dir) {
+  if (!searchResults.length) return;
+  searchCurrent = (searchCurrent + dir + searchResults.length) % searchResults.length;
+  highlightCurrent();
+  updateSearchCount();
+}
+
+function highlightCurrent() {
+  // Remove .current from all
+  chatMessages.querySelectorAll('.search-highlight.current').forEach(el => {
+    el.classList.remove('current');
+  });
+
+  const entry = searchResults[searchCurrent];
+  if (!entry) return;
+
+  // Mark the current highlight element
+  const mark = entry.span.querySelector(`[data-match-idx="${searchCurrent}"]`);
+  if (mark) {
+    mark.classList.add('current');
+    entry.msgEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Briefly outline the message bubble
+    entry.msgEl.classList.add('search-target');
+    setTimeout(() => entry.msgEl.classList.remove('search-target'), 1200);
+  }
+}
+
+function clearSearchHighlights() {
+  // Restore all msg-text spans to plain text
+  chatMessages.querySelectorAll('.msg-text').forEach(span => {
+    const marks = span.querySelectorAll('.search-highlight');
+    if (marks.length) {
+      // Flatten innerHTML back to text
+      span.textContent = span.textContent; // browser strips tags
+    }
+  });
+}
+
+function updateSearchCount() {
+  if (!searchCount) return;
+  if (!searchResults.length) {
+    searchCount.textContent = searchInput && searchInput.value.trim() ? '0 results' : '';
+    if (searchPrev) searchPrev.disabled = true;
+    if (searchNext) searchNext.disabled = true;
+    return;
+  }
+  searchCount.textContent = `${searchCurrent + 1} / ${searchResults.length}`;
+  if (searchPrev) searchPrev.disabled = searchResults.length <= 1;
+  if (searchNext) searchNext.disabled = searchResults.length <= 1;
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ════════════════════════════════════════════
+//  REPLY
+// ════════════════════════════════════════════
+
+function startReply(messageId, username, btnEl) {
+  // Get the text content from the message bubble
+  const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+  let text = '';
+  if (msgEl) {
+    const textSpan = msgEl.querySelector('.msg-text');
+    const fileEl   = msgEl.querySelector('.msg-file, .msg-image');
+    if (textSpan)  text = textSpan.textContent.trim();
+    else if (fileEl) text = '📎 File';
+  }
+
+  replyingToId       = messageId;
+  replyingToUsername = username;
+  replyingToText     = text;
+
+  if (replyBar) {
+    replyBarLabel.textContent = `↩ Replying to ${username}`;
+    replyBarText.textContent  = text.substring(0, 100) || '…';
+    replyBar.style.display    = 'flex';
+  }
+
+  messageInput.focus();
+}
+
+function cancelReply() {
+  replyingToId       = null;
+  replyingToUsername = null;
+  replyingToText     = null;
+  if (replyBar) replyBar.style.display = 'none';
+}
+
+// Scroll to a replied-to message (used when clicking the quote bubble)
+function scrollToMessage(messageId) {
+  const el = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // Flash effect
+  el.classList.add('search-target');
+  setTimeout(() => el.classList.remove('search-target'), 1200);
 }
 
 // ── Emoji Picker ──────────────────────────────
@@ -275,7 +504,6 @@ function renderReactions(messageId) {
 
 // ── Edit Message ──────────────────────────────
 function startEdit(messageId) {
-  // If already editing another, cancel first
   if (editingMessageId && editingMessageId !== messageId) cancelEdit();
 
   editingMessageId = messageId;
@@ -284,11 +512,10 @@ function startEdit(messageId) {
 
   const bubble = msgEl.querySelector('.message-bubble');
   const textSpan = bubble.querySelector('.msg-text');
-  if (!textSpan) return; // files can't be edited
+  if (!textSpan) return;
 
   const originalText = textSpan.textContent;
 
-  // Replace text span with editable textarea
   const editArea = document.createElement('textarea');
   editArea.className = 'msg-edit-input';
   editArea.value = originalText;
@@ -296,7 +523,6 @@ function startEdit(messageId) {
   editArea.rows = 1;
   textSpan.replaceWith(editArea);
 
-  // Auto-size
   editArea.style.height = 'auto';
   editArea.style.height = Math.min(editArea.scrollHeight, 120) + 'px';
   editArea.addEventListener('input', function() {
@@ -307,23 +533,12 @@ function startEdit(messageId) {
   editArea.focus();
   editArea.setSelectionRange(editArea.value.length, editArea.value.length);
 
-  // Keyboard shortcuts inside edit area
   editArea.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      submitEdit(messageId);
-    }
-    if (e.key === 'Escape') {
-      cancelEdit();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitEdit(messageId); }
+    if (e.key === 'Escape') { cancelEdit(); }
   });
 
-  // Show edit bar
-  if (editBar) {
-    editBar.style.display = 'block';
-  }
-
-  // Swap send button to save button
+  if (editBar) editBar.style.display = 'block';
   sendBtn.textContent = '✓';
   sendBtn.title = 'Save edit (Enter)';
   sendBtn._editMode = true;
@@ -334,18 +549,11 @@ function submitEdit(messageId) {
   if (!msgEl) return;
   const editArea = msgEl.querySelector('.msg-edit-input');
   if (!editArea) return;
-
   const newContent = editArea.value.trim();
   if (!newContent) return;
-
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({
-      type: 'edit_message',
-      message_id: messageId,
-      content: newContent,
-    }));
+    socket.send(JSON.stringify({ type: 'edit_message', message_id: messageId, content: newContent }));
   }
-
   cancelEdit();
 }
 
@@ -361,7 +569,6 @@ function cancelEdit() {
       editArea.replaceWith(span);
     }
   }
-
   editingMessageId = null;
   if (editBar) editBar.style.display = 'none';
   sendBtn.textContent = '➤';
@@ -384,23 +591,11 @@ function closeDeleteModal(event) {
 function executeDelete() {
   if (!pendingDeleteId) return;
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({
-      type: 'delete_message',
-      message_id: pendingDeleteId,
-    }));
+    socket.send(JSON.stringify({ type: 'delete_message', message_id: pendingDeleteId }));
   }
   document.getElementById('deleteModal').style.display = 'none';
   pendingDeleteId = null;
 }
-
-// Close modal on Escape key
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    document.getElementById('deleteModal').style.display = 'none';
-    pendingDeleteId = null;
-    if (editingMessageId) cancelEdit();
-  }
-});
 
 // ── WebSocket ─────────────────────────────────
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -430,6 +625,7 @@ function bindSocketEvents(ws) {
         messageId: data.message_id,
         fileUrl:   data.file_url  || null,
         fileType:  data.file_type || null,
+        replyTo:   data.reply_to  || null,
         own:       data.username === CURRENT_USER,
       });
       scrollToBottom();
@@ -470,26 +666,21 @@ function bindSocketEvents(ws) {
   };
 }
 
-// ── Handle Incoming Delete ────────────────────
 function handleMessageDeleted(messageId) {
   const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
   if (!msgEl) return;
-
   msgEl.style.transition = 'opacity 0.3s, transform 0.3s';
   msgEl.style.opacity    = '0';
   msgEl.style.transform  = 'scale(0.9)';
   setTimeout(() => msgEl.remove(), 320);
 }
 
-// ── Handle Incoming Edit ──────────────────────
 function handleMessageEdited(messageId, newContent) {
   const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
   if (!msgEl) return;
 
-  // If this message is currently being edited by us, cancel edit UI first
   if (editingMessageId === messageId) {
     cancelEdit();
-    // re-query after cancel
     const freshEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!freshEl) return;
     const textSpan = freshEl.querySelector('.msg-text');
@@ -501,7 +692,6 @@ function handleMessageEdited(messageId, newContent) {
   const textSpan = msgEl.querySelector('.msg-text');
   if (textSpan) {
     textSpan.textContent = newContent;
-    // Flash animation
     textSpan.style.transition = 'background 0.4s';
     textSpan.style.background = 'rgba(44,165,224,0.18)';
     textSpan.style.borderRadius = '4px';
@@ -531,7 +721,6 @@ createSocket();
 
 // ── Typing Indicator ──────────────────────────
 let typingUsers = {};
-let typingTimeout;
 
 function showTyping(username) {
   typingUsers[username] = true;
@@ -557,7 +746,6 @@ function updateTypingDisplay() {
 
 // ── Text Message / Edit Send ──────────────────
 function sendMessage() {
-  // If in edit mode, save edit instead
   if (editingMessageId && sendBtn._editMode) {
     submitEdit(editingMessageId);
     return;
@@ -565,10 +753,17 @@ function sendMessage() {
 
   const content = messageInput.value.trim();
   if (!content || !socket || socket.readyState !== WebSocket.OPEN) return;
-  socket.send(JSON.stringify({ message: content }));
+
+  const payload = { message: content };
+  if (replyingToId) {
+    payload.reply_to_id = replyingToId;
+  }
+
+  socket.send(JSON.stringify(payload));
   messageInput.value = '';
   messageInput.style.height = 'auto';
   messageInput.focus();
+  cancelReply();
 }
 
 // ── Auto-resize textarea ──────────────────────
@@ -639,14 +834,26 @@ if (attachBtn) attachBtn.addEventListener('click', openFilePicker);
 // ── Render Message ────────────────────────────
 let lastAuthor = null;
 
-function appendMessage({ content, username, timestamp, messageId, fileUrl, fileType, own, isEdited }) {
-  const isGrouped = username === lastAuthor;
+function appendMessage({ content, username, timestamp, messageId, fileUrl, fileType, replyTo, own, isEdited }) {
+  const isGrouped = username === lastAuthor && !replyTo;
   lastAuthor = username;
 
   const div = document.createElement('div');
   div.className = `message ${own ? 'own' : ''} ${isGrouped ? 'grouped' : ''}`;
   div.setAttribute('data-message-id', messageId);
   div.setAttribute('data-is-own', own ? 'true' : 'false');
+
+  // Reply quote HTML
+  let replyHtml = '';
+  if (replyTo) {
+    const safeUser = escapeHtml(replyTo.username);
+    const safeText = escapeHtml(replyTo.text.substring(0, 80));
+    replyHtml = `
+      <div class="reply-quote" onclick="scrollToMessage(${replyTo.id})">
+        <span class="reply-quote-author">↩ ${safeUser}</span>
+        <span class="reply-quote-text">${safeText}</span>
+      </div>`;
+  }
 
   let bubbleInner = '';
   if (fileUrl) {
@@ -661,21 +868,22 @@ function appendMessage({ content, username, timestamp, messageId, fileUrl, fileT
   }
 
   const editedBadge = isEdited ? '<span class="edited-badge">edited</span>' : '';
-  const ownActions = own && !fileUrl ? `
-    <span class="msg-actions">
-      <button class="msg-action-btn edit-btn"
-              onclick="startEdit('${messageId}')" title="Edit">✏️</button>
-      <button class="msg-action-btn delete-btn"
-              onclick="confirmDelete('${messageId}')" title="Delete">🗑️</button>
-    </span>` : own ? `
-    <span class="msg-actions">
-      <button class="msg-action-btn delete-btn"
-              onclick="confirmDelete('${messageId}')" title="Delete">🗑️</button>
-    </span>` : '';
+
+  // Reply button always shown; edit/delete only for own text messages
+  const replyAction = `<button class="msg-action-btn reply-btn"
+      onclick="startReply('${messageId}', '${escapeHtml(username)}', this)"
+      title="Reply">↩</button>`;
+
+  const ownActions = own ? `
+    ${!fileUrl ? `<button class="msg-action-btn edit-btn"
+        onclick="startEdit('${messageId}')" title="Edit">✏️</button>` : ''}
+    <button class="msg-action-btn delete-btn"
+        onclick="confirmDelete('${messageId}')" title="Delete">🗑️</button>` : '';
 
   div.innerHTML = `
     <div class="message-author">${escapeHtml(username)}</div>
     <div class="message-bubble">
+      ${replyHtml}
       ${bubbleInner}
       <span class="reaction-trigger" title="Add reaction">😊</span>
     </div>
@@ -683,7 +891,10 @@ function appendMessage({ content, username, timestamp, messageId, fileUrl, fileT
       <span class="message-time">${timestamp}</span>
       ${editedBadge}
       ${own ? '<span class="read-badge">✓</span>' : ''}
-      ${ownActions}
+      <span class="msg-actions">
+        ${replyAction}
+        ${ownActions}
+      </span>
     </div>
   `;
 

@@ -96,6 +96,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'message_id': message_id,
                     'file_url':   file_url,
                     'file_type':  file_type,
+                    'reply_to':   None,
                 }
             )
             return
@@ -132,14 +133,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 )
             return
 
-        # Regular text message
+        # Regular text message (with optional reply)
         message_content = data.get('message', '').strip()
         if not message_content:
             return
 
-        message = await self.save_message(message_content)
+        reply_to_id = data.get('reply_to_id')  # may be None
+        message = await self.save_message(message_content, reply_to_id)
         if message is None:
             return
+
+        # Build reply_to preview payload
+        reply_preview = await self.get_reply_preview(reply_to_id)
 
         await self.channel_layer.group_send(
             self.room_group_name,
@@ -151,6 +156,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'message_id': message.id,
                 'file_url':   None,
                 'file_type':  None,
+                'reply_to':   reply_preview,
             }
         )
 
@@ -165,6 +171,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'message_id': event['message_id'],
             'file_url':   event.get('file_url'),
             'file_type':  event.get('file_type'),
+            'reply_to':   event.get('reply_to'),
         }))
 
     async def user_typing(self, event):
@@ -234,11 +241,38 @@ class ChatConsumer(AsyncWebsocketConsumer):
             pass
 
     @database_sync_to_async
-    def save_message(self, content):
+    def save_message(self, content, reply_to_id=None):
         try:
             room = Room.objects.get(slug=self.room_slug)
-            return Message.objects.create(room=room, author=self.user, content=content)
+            reply_to = None
+            if reply_to_id:
+                try:
+                    reply_to = Message.objects.get(id=reply_to_id, room=room)
+                except Message.DoesNotExist:
+                    pass
+            return Message.objects.create(
+                room=room,
+                author=self.user,
+                content=content,
+                reply_to=reply_to,
+            )
         except Room.DoesNotExist:
+            return None
+
+    @database_sync_to_async
+    def get_reply_preview(self, reply_to_id):
+        """Return a small dict with the quoted message info, or None."""
+        if not reply_to_id:
+            return None
+        try:
+            msg = Message.objects.select_related('author').get(id=reply_to_id)
+            preview_text = msg.content[:80] if not msg.file else f'📎 {msg.content}'
+            return {
+                'id':       msg.id,
+                'username': msg.author.username,
+                'text':     preview_text,
+            }
+        except Message.DoesNotExist:
             return None
 
     @database_sync_to_async
@@ -257,7 +291,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def delete_message(self, message_id):
-        """Delete a message only if the current user is the author."""
         try:
             msg = Message.objects.get(id=message_id, author=self.user)
             msg.delete()
@@ -267,7 +300,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def edit_message(self, message_id, new_content):
-        """Edit a message only if the current user is the author."""
         try:
             msg = Message.objects.get(id=message_id, author=self.user)
             msg.content = new_content

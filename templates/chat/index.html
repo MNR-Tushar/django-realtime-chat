@@ -102,6 +102,43 @@
 .empty-state { grid-column: 1/-1; padding: 48px; text-align: center; background: #1c2733; border: 1px dashed #2b3a4d; border-radius: 16px; color: #7b9ab0; }
 .empty-state h3 { font-size: 16px; color: #c5d1de; margin: 12px 0 6px; }
 
+/* ── Unread badge ── */
+.unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--red);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(240,84,84,0.4);
+  animation: badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes badgePop {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+/* Unread badge on DM card */
+.dm-unread {
+  position: absolute;
+  top: 6px; right: 6px;
+  min-width: 18px; height: 18px;
+  padding: 0 5px;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(240,84,84,0.4);
+  animation: badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+
 .dm-section { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .dm-section::-webkit-scrollbar { height: 3px; }
 .dm-section::-webkit-scrollbar-thumb { background: #2b3a4d; border-radius: 2px; }
@@ -109,6 +146,7 @@
   flex-shrink: 0; background: #1c2733; border: 1px solid #2b3a4d; border-radius: 14px;
   padding: 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px;
   text-decoration: none; color: #f0f4f8; transition: all 0.2s; min-width: 90px;
+  position: relative;
 }
 .dm-card:hover { border-color: #2ca5e0; background: #1a2a3a; }
 .dm-card.new-dm { border-style: dashed; opacity: 0.75; }
@@ -150,7 +188,6 @@
 
   <div class="index-section">
 
-    
     {% with rooms.first as featured %}
     {% if featured %}
     <div class="section-header">
@@ -170,42 +207,42 @@
     {% endif %}
     {% endwith %}
 
-    
+    {# ── All Public Rooms ── #}
     <div class="section-header" style="margin-top:8px;">
       <div class="section-title">All Rooms</div>
       <span style="font-size:12px;color:var(--muted);">{{ rooms.count }} room{% if rooms.count != 1 %}s{% endif %}</span>
     </div>
 
     <div class="rooms-grid">
-      {% for room in rooms %}
-        
-        {% if not room.is_private %}
-          {% cycle 'icon-blue' 'icon-red' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as icon_class silent %}
-          {% cycle '💬' '🔥' '🛠️' '🎯' '🌟' '⚡' as room_icon silent %}
-          <a href="{% url 'chat:room' room.slug %}" class="room-card">
-            <div class="room-top">
-              <div class="room-icon-wrap {{ icon_class }}">{{ room_icon }}</div>
-              <div class="room-tags">
-                <span class="room-tag tag-active">Active</span>
+      {% for item in public_rooms_data %}
+        {% cycle 'icon-blue' 'icon-red' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as icon_class silent %}
+        {% cycle '💬' '🔥' '🛠️' '🎯' '🌟' '⚡' as room_icon silent %}
+        <a href="{% url 'chat:room' item.room.slug %}" class="room-card">
+          <div class="room-top">
+            <div class="room-icon-wrap {{ icon_class }}">{{ room_icon }}</div>
+            <div class="room-tags">
+              <span class="room-tag tag-active">Active</span>
+              {% if item.unread > 0 %}
+                <span class="unread-badge">{{ item.unread }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <p class="room-name"># {{ item.room.name }}</p>
+            <p class="room-desc">{{ item.room.description|default:"Start chatting..." }}</p>
+          </div>
+          <div class="room-footer">
+            <div class="room-members">
+              <div class="member-dots">
+                {% for member in item.room.members.all|slice:":3" %}
+                  <div class="member-dot md{{ forloop.counter }}">{{ member.username|first|upper }}</div>
+                {% endfor %}
               </div>
+              {{ item.room.members.count }} member{% if item.room.members.count != 1 %}s{% endif %}
             </div>
-            <div>
-              <p class="room-name"># {{ room.name }}</p>
-              <p class="room-desc">{{ room.description|default:"Start chatting..." }}</p>
-            </div>
-            <div class="room-footer">
-              <div class="room-members">
-                <div class="member-dots">
-                  {% for member in room.members.all|slice:":3" %}
-                    <div class="member-dot md{{ forloop.counter }}">{{ member.username|first|upper }}</div>
-                  {% endfor %}
-                </div>
-                {{ room.members.count }} member{% if room.members.count != 1 %}s{% endif %}
-              </div>
-              <span class="room-arrow">→</span>
-            </div>
-          </a>
-        {% endif %}
+            <span class="room-arrow">→</span>
+          </div>
+        </a>
       {% empty %}
         <div class="empty-state">
           <div style="font-size:36px;">💬</div>
@@ -215,33 +252,36 @@
       {% endfor %}
     </div>
 
-
-    {% if my_private_groups %}
+    {# ── Private Groups ── #}
+    {% if private_groups_data %}
     <div class="section-header" style="margin-top:32px;">
       <div class="section-title">My Private Groups</div>
       <span style="font-size:12px;color:var(--muted);">Only you and members can see these</span>
     </div>
     <div class="rooms-grid">
-      {% for proom in my_private_groups %}
-        <a href="{% url 'chat:room' proom.slug %}" class="room-card private-group">
+      {% for item in private_groups_data %}
+        <a href="{% url 'chat:room' item.room.slug %}" class="room-card private-group">
           <div class="room-top">
             <div class="room-icon-wrap icon-purple">🔒</div>
             <div class="room-tags">
               <span class="room-tag tag-private">Private</span>
+              {% if item.unread > 0 %}
+                <span class="unread-badge">{{ item.unread }}</span>
+              {% endif %}
             </div>
           </div>
           <div>
-            <p class="room-name">🔒 {{ proom.name }}</p>
-            <p class="room-desc">{{ proom.description|default:"Private group chat" }}</p>
+            <p class="room-name">🔒 {{ item.room.name }}</p>
+            <p class="room-desc">{{ item.room.description|default:"Private group chat" }}</p>
           </div>
           <div class="room-footer">
             <div class="room-members">
               <div class="member-dots">
-                {% for member in proom.members.all|slice:":3" %}
+                {% for member in item.room.members.all|slice:":3" %}
                   <div class="member-dot md{{ forloop.counter }}">{{ member.username|first|upper }}</div>
                 {% endfor %}
               </div>
-              {{ proom.members.count }} member{% if proom.members.count != 1 %}s{% endif %}
+              {{ item.room.members.count }} member{% if item.room.members.count != 1 %}s{% endif %}
             </div>
             <span class="room-arrow">→</span>
           </div>
@@ -250,7 +290,7 @@
     </div>
     {% endif %}
 
-    
+    {# ── Direct Messages ── #}
     {% if request.user.is_authenticated %}
     <div class="section-header" style="margin-top:32px;">
       <div class="section-title">Direct Messages</div>
@@ -261,6 +301,9 @@
       {% for dm in dm_list %}
         {% cycle 'icon-blue' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as dm_color silent %}
         <a href="{% url 'chat:room' dm.room.slug %}" class="dm-card">
+          {% if dm.unread > 0 %}
+            <span class="dm-unread">{{ dm.unread }}</span>
+          {% endif %}
           <div class="dm-avatar {{ dm_color }}">
             {{ dm.other_user.username|first|upper }}
             <span class="dm-status {% if dm.other_user.is_online %}online{% else %}offline{% endif %}"></span>

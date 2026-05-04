@@ -61,6 +61,15 @@ class Message(models.Model):
     is_read = models.BooleanField(default=False)
     is_edited = models.BooleanField(default=False)
 
+    # Reply feature
+    reply_to = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='replies',
+    )
+
     file = models.FileField(upload_to='chat_files/%Y/%m/', null=True, blank=True)
     file_type = models.CharField(
         max_length=20,

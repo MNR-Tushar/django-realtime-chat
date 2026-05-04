@@ -13,13 +13,11 @@ def index(request):
     # public rooms — is_private=False
     public_rooms = Room.objects.filter(is_private=False)
 
-    
     my_private_groups = Room.objects.filter(
         is_private=True,
         members=request.user
     ).exclude(slug__startswith='dm-')
 
-    
     my_dm_rooms = Room.objects.filter(
         is_private=True,
         members=request.user,
@@ -29,20 +27,48 @@ def index(request):
     online_count = User.objects.filter(is_online=True).count()
     messages_today = Message.objects.filter(timestamp__date=timezone.now().date()).count()
 
-    
+    # ── Unread counts helper ───────────────────
+    def unread_for(room):
+        return Message.objects.filter(
+            room=room,
+            is_read=False,
+        ).exclude(author=request.user).count()
+
+    # ── DM list with unread ────────────────────
     dm_list = []
     for dm_room in my_dm_rooms:
         other = dm_room.members.exclude(id=request.user.id).first()
         if other:
-            dm_list.append({'room': dm_room, 'other_user': other})
+            dm_list.append({
+                'room': dm_room,
+                'other_user': other,
+                'unread': unread_for(dm_room),
+            })
 
-    
+    # ── Public rooms with unread ───────────────
+    public_rooms_data = []
+    for room in public_rooms:
+        public_rooms_data.append({
+            'room': room,
+            'unread': unread_for(room),
+        })
+
+    # ── Private groups with unread ─────────────
+    private_groups_data = []
+    for room in my_private_groups:
+        private_groups_data.append({
+            'room': room,
+            'unread': unread_for(room),
+        })
+
     existing_dm_user_ids = [d['other_user'].id for d in dm_list]
     other_users = User.objects.exclude(id=request.user.id).exclude(id__in=existing_dm_user_ids)
 
     return render(request, 'chat/index.html', {
+        # legacy — still passed so template can use rooms.count
         'rooms': public_rooms,
-        'my_private_groups': my_private_groups,  
+        'public_rooms_data': public_rooms_data,
+        'private_groups_data': private_groups_data,
         'dm_list': dm_list,
         'other_users': other_users,
         'online_count': online_count,
@@ -58,10 +84,9 @@ def room(request, room_slug):
     if room.is_private and not room.members.filter(id=request.user.id).exists():
         raise Http404("Room not found")
 
-    messages = room.messages.select_related('author')[:50]
+    messages = room.messages.select_related('author', 'reply_to__author')[:50]
     room.messages.exclude(author=request.user).filter(is_read=False).update(is_read=True)
 
-    
     public_rooms = Room.objects.filter(is_private=False)
     my_private_rooms = Room.objects.filter(is_private=True, members=request.user)
 
