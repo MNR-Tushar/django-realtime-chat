@@ -14,4 +14,10 @@ urlpatterns = [
     path('room/<slug:room_slug>/join-request/cancel/', views.cancel_join_request, name='cancel_join_request'),
     path('join-request/<int:request_id>/<str:action>/', views.handle_join_request, name='handle_join_request'),
     path('pending-requests/', views.pending_requests_panel, name='pending_requests_panel'),
+
+    # ── Private Room & Invitation URLs ──────────────────────
+    path('create-room/', views.create_private_room, name='create_private_room'),
+    path('room/<slug:room_slug>/invite/', views.invite_to_room, name='invite_to_room'),
+    path('invitation/<int:invitation_id>/<str:action>/', views.handle_invitation, name='handle_invitation'),
+    path('my-invitations/', views.my_invitations, name='my_invitations'),
 ]

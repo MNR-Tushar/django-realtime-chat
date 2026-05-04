@@ -4,7 +4,7 @@ from .models import *
 
 @admin.register(Room)
 class RoomAdmin(admin.ModelAdmin):
-    list_display = ['name', 'slug', 'is_private', 'created_at']
+    list_display = ['name', 'slug', 'is_private', 'admin', 'created_at']
     list_filter = ['is_private']
     prepopulated_fields = {'slug': ('name',)}
     search_fields = ['name']
@@ -34,3 +34,13 @@ class JoinRequestAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user', 'room')
+
+
+@admin.register(Invitation)
+class InvitationAdmin(admin.ModelAdmin):
+    list_display = ['invited_by', 'invited_user', 'room', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['invited_by__username', 'invited_user__username', 'room__name']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('invited_by', 'invited_user', 'room')

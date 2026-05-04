@@ -9,6 +9,13 @@ class Room(models.Model):
     description = models.TextField(blank=True, null=True)
 
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='rooms', blank=True)
+    admin = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='admin_of_rooms',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -113,3 +120,38 @@ class JoinRequest(models.Model):
 
     def __str__(self):
         return f'{self.user.username} → {self.room.name} [{self.status}]'
+
+
+class Invitation(models.Model):
+    """Invitation to join a private room"""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('declined', 'Declined'),
+    ]
+
+    room = models.ForeignKey(
+        Room,
+        on_delete=models.CASCADE,
+        related_name='invitations',
+    )
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='sent_invitations',
+    )
+    invited_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='received_invitations',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        unique_together = ('room', 'invited_user')
+
+    def __str__(self):
+        return f'{self.invited_by.username} invited {self.invited_user.username} → {self.room.name} [{self.status}]'

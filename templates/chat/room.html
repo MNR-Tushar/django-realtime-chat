@@ -169,6 +169,23 @@
   background: rgba(44,165,224,0.12);
   color: var(--primary);
 }
+
+/* ── Invite Modal ── */
+.modal-form-group { margin-bottom: 14px; }
+.modal-form-group label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--muted);
+  margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.modal-form-group input {
+  width: 100%; padding: 10px 14px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: var(--bg);
+  color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif;
+  outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+}
+.modal-form-group input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
 </style>
 {% endblock %}
 
@@ -255,6 +272,9 @@
         <button id="themeBtn" class="icon-btn theme-toggle" title="Toggle Theme">🌙</button>
         {% if not room.slug|slice:":3" == "dm-" %}
           <button id="usersBtn" class="icon-btn" title="Members">👥</button>
+        {% endif %}
+        {% if room.is_private and not room.slug|slice:":3" == "dm-" and is_admin %}
+          <button id="inviteBtn" class="icon-btn" title="Invite user" onclick="openInviteModal()">✉️</button>
         {% endif %}
       </div>
     </div>
@@ -457,6 +477,38 @@
 
 <div id="toastContainer"></div>
 
+{# ── Invite Modal ── #}
+{% if room.is_private and not room.slug|slice:":3" == "dm-" and is_admin %}
+<div id="inviteModal" class="modal-overlay" style="display:none;" onclick="closeInviteModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-icon">✉️</div>
+    <h3 class="modal-title">Invite to Room</h3>
+    <p class="modal-body">Invite a user to join "{{ room.name }}"</p>
+    <form id="inviteForm" onsubmit="submitInvite(event)">
+      {% csrf_token %}
+      <div class="modal-form-group">
+        <label for="inviteUsername">Username</label>
+        <input type="text" id="inviteUsername" name="username" placeholder="Enter username..." required>
+        {% if inviteable_users %}
+        <div style="margin-top:8px;max-height:150px;overflow-y:auto;">
+          <p style="font-size:11px;color:var(--muted);margin-bottom:4px;">Quick select:</p>
+          {% for u in inviteable_users %}
+            <button type="button" class="btn btn-sm"
+                    style="margin:2px;font-size:11px;"
+                    onclick="document.getElementById('inviteUsername').value='{{ u.username }}'">{{ u.username }}</button>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeInviteModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="inviteSubmitBtn">Send Invite</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <script>
   const ROOM_SLUG    = "{{ room.slug }}";
   const CURRENT_USER = "{{ request.user.username }}";
@@ -467,4 +519,63 @@
 
 {% block extra_js %}
 <script src="{% static 'js/chat.js' %}"></script>
+<script>
+// ── Invite Modal ──────────────────────────────────────────────────
+function openInviteModal() {
+  const m = document.getElementById('inviteModal');
+  if (m) { m.style.display = 'flex'; document.getElementById('inviteUsername').focus(); }
+}
+
+function closeInviteModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  const m = document.getElementById('inviteModal');
+  if (m) { m.style.display = 'none'; document.getElementById('inviteForm').reset(); }
+}
+
+async function submitInvite(e) {
+  e.preventDefault();
+  const btn = document.getElementById('inviteSubmitBtn');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  const username = document.getElementById('inviteUsername').value.trim();
+  try {
+    const formData = new FormData();
+    formData.append('username', username);
+    formData.append('csrfmiddlewaretoken', CSRF_TOKEN);
+
+    const res = await fetch(`/room/${ROOM_SLUG}/invite/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN },
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.ok) {
+      closeInviteModal();
+      if (typeof showToast === 'function') {
+        showToast('Invite Sent!', data.message, 'success');
+      } else {
+        alert(data.message);
+      }
+    } else {
+      btn.disabled = false;
+      btn.textContent = orig;
+      if (typeof showToast === 'function') {
+        showToast('Error', data.error || 'Something went wrong.', 'error');
+      } else {
+        alert(data.error || 'Something went wrong.');
+      }
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = orig;
+    if (typeof showToast === 'function') {
+      showToast('Error', 'Network error. Please try again.', 'error');
+    } else {
+      alert('Network error. Please try again.');
+    }
+  }
+}
+</script>
 {% endblock %}

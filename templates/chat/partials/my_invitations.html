@@ -1,0 +1,18 @@
+{% for inv in invitations %}
+<div class="invitation-card" id="invitation-{{ inv.id }}">
+  <div class="invitation-avatar">{{ inv.invited_by.username|first|upper }}</div>
+  <div class="invitation-info">
+    <strong>{{ inv.invited_by.username }}</strong>
+    <span>invited you to <em>{{ inv.room.name }}</em></span>
+  </div>
+  <div class="invitation-actions">
+    <button class="btn btn-sm btn-primary"
+            onclick="handleInvitation({{ inv.id }}, 'accept')">✓ Accept</button>
+    <button class="btn btn-sm"
+            style="border-color:var(--red);color:var(--red);"
+            onclick="handleInvitation({{ inv.id }}, 'decline')">✕ Decline</button>
+  </div>
+</div>
+{% empty %}
+<p style="font-size:13px;color:var(--muted);text-align:center;padding:12px 0;">No pending invitations.</p>
+{% endfor %}
