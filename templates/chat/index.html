@@ -381,6 +381,142 @@
   display: flex !important;
 }
 
+/* ── Rooms Slideshow ── */
+.rooms-slideshow-container {
+  position: relative;
+  margin-bottom: 28px;
+}
+.rooms-slideshow {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  padding: 10px 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.rooms-slideshow::-webkit-scrollbar {
+  display: none;
+}
+.room-slide {
+  flex-shrink: 0;
+  width: 200px;
+  background: linear-gradient(145deg, #1c2733 0%, #1a2330 100%);
+  border: 1px solid #2b3a4d;
+  border-radius: 18px;
+  padding: 16px;
+  text-decoration: none;
+  color: #f0f4f8;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  scroll-snap-align: start;
+  position: relative;
+}
+.room-slide:hover {
+  transform: translateY(-4px);
+  border-color: #2ca5e0;
+  box-shadow: 0 12px 32px rgba(44,165,224,0.15);
+}
+.room-slide-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.room-slide-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.room-slide-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 14px;
+}
+.room-slide-unread {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--red);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.room-slide-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f0f4f8;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.room-slide-desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin-bottom: 14px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.room-slide-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid rgba(43,58,77,0.5);
+}
+.room-slide-members {
+  font-size: 12px;
+  color: var(--muted);
+}
+.room-slide-arrow {
+  font-size: 18px;
+  color: var(--primary);
+  transition: transform 0.2s;
+}
+.room-slide:hover .room-slide-arrow {
+  transform: translateX(3px);
+}
+.rooms-slide-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 2;
+}
+.rooms-slide-btn:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.rooms-slide-prev { left: -14px; }
+.rooms-slide-next { right: -14px; }
+
 /* ── DM Slideshow (Auto Carousel) ── */
 .dm-slideshow-container {
   position: relative;
@@ -606,61 +742,48 @@
     {% endif %}
     {% endwith %}
 
-    {# ── All Public Rooms ── #}
-    <div class="section-header" style="margin-top:8px;">
+    {# ── All Public Rooms Slideshow ── #}
+    <div class="section-header" style="margin-top:32px;">
       <div class="section-title">All Rooms</div>
       <span style="font-size:12px;color:var(--muted);">{{ rooms.count }} room{% if rooms.count != 1 %}s{% endif %}</span>
     </div>
 
-    <div class="rooms-grid" id="publicRoomsGrid">
-      {% for item in public_rooms_data %}
-        {% cycle 'icon-blue' 'icon-red' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as icon_class silent %}
-        {% cycle '💬' '🔥' '🛠️' '🎯' '🌟' '⚡' as room_icon silent %}
-        <a href="{% url 'chat:room' item.room.slug %}" class="room-card{% if forloop.counter > 6 %} extra-item{% endif %}">
-          <div class="room-top">
-            <div class="room-icon-wrap {{ icon_class }}">
-              {% if item.room.avatar %}
-                <img src="{{ item.room.avatar.url }}" alt="{{ item.room.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 14px;">
-              {% else %}
-                {{ room_icon }}
-              {% endif %}
-            </div>
-            <div class="room-tags">
-              <span class="room-tag tag-active">Active</span>
-              {% if item.unread > 0 %}
-                <span class="unread-badge">{{ item.unread }}</span>
-              {% endif %}
-            </div>
-          </div>
-          <div>
-            <p class="room-name"># {{ item.room.name }}</p>
-            <p class="room-desc">{{ item.room.description|default:"Start chatting..." }}</p>
-          </div>
-          <div class="room-footer">
-            <div class="room-members">
-              <div class="member-dots">
-                {% for member in item.room.members.all|slice:":3" %}
-                  <div class="member-dot md{{ forloop.counter }}">{{ member.username|first|upper }}</div>
-                {% endfor %}
+    <div class="rooms-slideshow-container">
+      <div class="rooms-slideshow" id="roomsSlideshow">
+        {% for item in public_rooms_data %}
+          {% cycle 'icon-blue' 'icon-red' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as icon_class silent %}
+          {% cycle '💬' '🔥' '🛠️' '🎯' '🌟' '⚡' as room_icon silent %}
+          <a href="{% url 'chat:room' item.room.slug %}" class="room-slide">
+            <div class="room-slide-header">
+              <div class="room-slide-icon {{ icon_class }}">
+                {% if item.room.avatar %}
+                  <img src="{{ item.room.avatar.url }}" alt="{{ item.room.name }}">
+                {% else %}
+                  {{ room_icon }}
+                {% endif %}
               </div>
-              {{ item.room.members.count }} member{% if item.room.members.count != 1 %}s{% endif %}
+              {% if item.unread > 0 %}
+                <span class="room-slide-unread">{{ item.unread }}</span>
+              {% endif %}
             </div>
-            <span class="room-arrow">→</span>
+            <div class="room-slide-name">{{ item.room.name }}</div>
+            <div class="room-slide-desc">{{ item.room.description|default:"Start chatting..."|truncatechars:40 }}</div>
+            <div class="room-slide-footer">
+              <span class="room-slide-members">👥 {{ item.room.members.count }}</span>
+              <span class="room-slide-arrow">→</span>
+            </div>
+          </a>
+        {% empty %}
+          <div class="empty-state">
+            <div style="font-size:36px;">💬</div>
+            <h3>No rooms yet</h3>
+            <p>Create one from the Admin panel to get started.</p>
           </div>
-        </a>
-      {% empty %}
-        <div class="empty-state">
-          <div style="font-size:36px;">💬</div>
-          <h3>No rooms yet</h3>
-          <p>Create one from the Admin panel to get started.</p>
-        </div>
-      {% endfor %}
+        {% endfor %}
+      </div>
+      <button class="rooms-slide-btn rooms-slide-prev" onclick="moveRoomsSlide(-1)">‹</button>
+      <button class="rooms-slide-btn rooms-slide-next" onclick="moveRoomsSlide(1)">›</button>
     </div>
-    {% if public_rooms_data|length > 6 %}
-      <button class="show-more-btn" onclick="toggleSection('publicRoomsGrid', this)">
-        Show {{ public_rooms_data|length|add:"-6" }} more room{{ public_rooms_data|length|add:"-6"|pluralize }} <span class="arrow">▼</span>
-      </button>
-    {% endif %}
 
     {# ── My Private Groups (member) ── #}
     {% if private_groups_data %}
@@ -899,6 +1022,30 @@ function moveSlide(direction) {
   const slideWidth = slides[0].offsetWidth + 10; // width + gap
   slideshow.scrollTo({
     left: slideIndex * slideWidth,
+    behavior: 'smooth'
+  });
+}
+
+// ── Rooms Slideshow Navigation ─────────────────────────────────────────
+let roomsSlideIndex = 0;
+
+function moveRoomsSlide(direction) {
+  const slideshow = document.getElementById('roomsSlideshow');
+  if (!slideshow) return;
+
+  const slides = slideshow.querySelectorAll('.room-slide');
+  if (slides.length === 0) return;
+
+  roomsSlideIndex += direction;
+
+  // Loop around
+  if (roomsSlideIndex < 0) roomsSlideIndex = slides.length - 1;
+  if (roomsSlideIndex >= slides.length) roomsSlideIndex = 0;
+
+  // Scroll to the slide
+  const slideWidth = slides[0].offsetWidth + 16; // width + gap
+  slideshow.scrollTo({
+    left: roomsSlideIndex * slideWidth,
     behavior: 'smooth'
   });
 }
