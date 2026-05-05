@@ -769,7 +769,10 @@
             <div class="room-slide-name">{{ item.room.name }}</div>
             <div class="room-slide-desc">{{ item.room.description|default:"Start chatting..."|truncatechars:40 }}</div>
             <div class="room-slide-footer">
-              <span class="room-slide-members">👥 {{ item.room.members.count }}</span>
+              <span class="room-slide-members">
+                👥 {{ item.room.members.count }}
+                <span style="color:var(--green);margin-left:4px;">● {{ item.online_members }} online</span>
+              </span>
               <span class="room-slide-arrow">→</span>
             </div>
           </a>
@@ -825,6 +828,7 @@
                   {% endfor %}
                 </div>
                 {{ item.room.members.count }} member{% if item.room.members.count != 1 %}s{% endif %}
+                <span style="color:var(--green);margin-left:6px;">● {{ item.online_members }} online</span>
               </div>
               <span class="room-arrow">→</span>
             </div>
@@ -881,6 +885,7 @@
                 {% endfor %}
               </div>
               {{ item.room.members.count }} member{% if item.room.members.count != 1 %}s{% endif %}
+              <span style="color:var(--green);margin-left:6px;">● {{ item.online_members }} online</span>
             </div>
             {% if item.has_pending %}
               <button class="join-request-btn pending"

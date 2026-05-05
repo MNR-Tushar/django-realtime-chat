@@ -196,45 +196,61 @@
   <aside class="sidebar">
     <div class="sidebar-header">
       <h3>💬 Rooms</h3>
-      <a href="{% url 'chat:index' %}" class="btn btn-sm">All</a>
+       <span id="connectionStatus" class="status connecting">Connecting...</span>
     </div>
     <div class="sidebar-search">
       <input type="text" placeholder="Search rooms..." id="sidebarSearch">
     </div>
+  
+      <div class="section-lbl" style="margin-top:6px">Private Groups <button class="create-room-btn" onclick="openCreateRoomModal()" title="Create">＋</button></div>
     <div class="room-list" id="roomList">
-      {% if room.is_private %}
-        <a href="{% url 'chat:room' room.slug %}" class="room-item active">
+      {% for r in my_private_rooms %}
+        <a href="{% url 'chat:room' r.slug %}" class="room-item {% if r.slug == room.slug %}active{% endif %}">
           <div class="room-avatar">
-            {% if room.avatar %}
-              <img src="{{ room.avatar.url }}" alt="{{ room.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+            {% if r.avatar %}
+              <img src="{{ r.avatar.url }}" alt="{{ r.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
             {% else %}
               🔒
             {% endif %}
           </div>
           <div class="room-meta">
             <div class="room-name">
-              {% if room.slug|slice:":3" == "dm-" %}
-                {% for member in room.members.all %}
+              {% if r.slug|slice:":3" == "dm-" %}
+                {% for member in r.members.all %}
                   {% if member != request.user %}{{ member.username }}{% endif %}
                 {% endfor %}
               {% else %}
-                {{ room.name }}
+                {{ r.name }}
               {% endif %}
             </div>
-            <div class="room-preview">
-              {% if room.slug|slice:":3" == "dm-" %}Private chat{% else %}Private group{% endif %}
-            </div>
+           <div class="room-preview">
+            {{ r.last_message_content|default:"No messages yet..."|truncatechars:30 }}
+          </div>
+
+          <div class="r-meta">
+            <span class="r-time">
+              {{ r.last_message_time|timesince }} ago
+            </span>
+          </div>
           </div>
         </a>
-      {% endif %}
-
+      {% endfor %}
+       <div class="section-lbl">Public Rooms</div>
       {% for r in public_rooms %}
         <a href="{% url 'chat:room' r.slug %}"
            class="room-item {% if r.slug == room.slug %}active{% endif %}">
           <div class="room-avatar">#</div>
           <div class="room-meta">
             <div class="room-name">{{ r.name }}</div>
-            <div class="room-preview">{{ r.description|default:"Chat here..." }}</div>
+            <div class="room-preview">
+  {{ r.last_message_content|default:"No messages yet..."|truncatechars:30 }}
+</div>
+
+<div class="r-meta">
+  <span class="r-time">
+    {{ r.last_message_time|timesince }} ago
+  </span>
+</div>
           </div>
         </a>
       {% endfor %}
@@ -263,7 +279,7 @@
               <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px;">Private Chat</span>
             {% else %}
               🔒 {{ room.name }}
-              <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px;">Private Group</span>
+             
             {% endif %}
           {% else %}
             # {{ room.name }}
@@ -285,12 +301,12 @@
             {% endfor %}
             &nbsp;·&nbsp;
           {% else %}
-            {# For group rooms: show online count #}
+            {# For group rooms: show online count of room members #}
             <span class="online-dot"></span>
-            <span id="onlineCount">0</span> online
+            <span id="onlineCount">{{ room_online_members }}</span> online
             &nbsp;·&nbsp;
           {% endif %}
-          <span id="connectionStatus" class="status connecting">Connecting...</span>
+          <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px;">Private Group</span>
         </div>
       </div>
       <div class="chat-header-actions">
@@ -376,13 +392,7 @@
                   title="Add reaction">😊</span>
           </div>
           <div class="message-footer">
-            <span class="message-time">{{ message.timestamp|date:"H:i" }}</span>
-            {% if message.is_edited %}
-              <span class="edited-badge">edited</span>
-            {% endif %}
-            {% if message.author == request.user %}
-              <span class="read-badge">{% if message.is_read %}✓✓{% else %}✓{% endif %}</span>
-            {% endif %}
+            
             <span class="msg-actions">
               {# Reply button — visible for all messages #}
               <button class="msg-action-btn reply-btn"
@@ -399,6 +409,13 @@
                         title="Delete message">🗑️</button>
               {% endif %}
             </span>
+            <span class="message-time">{{ message.timestamp|date:"H:i" }}</span>
+            {% if message.is_edited %}
+              <span class="edited-badge">edited</span>
+            {% endif %}
+            {% if message.author == request.user %}
+              <span class="read-badge">{% if message.is_read %}✓✓{% else %}✓{% endif %}</span>
+            {% endif %}
           </div>
         </div>
       {% endfor %}
@@ -560,6 +577,63 @@
 {% block extra_js %}
 <script src="{% static 'js/chat.js' %}"></script>
 <script>
+
+  window.addEventListener("load", function () {
+    const activeRoom = document.querySelector(".room-item.active");
+    if (activeRoom) {
+      activeRoom.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    }
+  });
+
+  // ── Create Room Modal ──────────────────────────────────────────────
+function openCreateRoomModal() {
+  document.getElementById('createRoomModal').style.display = 'flex';
+  document.getElementById('roomName').focus();
+}
+
+function closeCreateRoomModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('createRoomModal').style.display = 'none';
+  document.getElementById('createRoomForm').reset();
+}
+
+async function submitCreateRoom(e) {
+  e.preventDefault();
+  const btn = document.getElementById('createRoomSubmitBtn');
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+
+  try {
+    const form = document.getElementById('createRoomForm');
+    const formData = new FormData(form);
+
+    const res = await fetch('/create-room/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN },
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.ok) {
+      closeCreateRoomModal();
+      showToast('Room Created!', data.message, 'success');
+      setTimeout(() => {
+        window.location.href = `/room/${data.room_slug}/`;
+      }, 800);
+    } else {
+      btn.disabled = false;
+      btn.textContent = origText;
+      showToast('Error', data.error || 'Something went wrong.', 'error');
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = origText;
+    showToast('Error', 'Network error. Please try again.', 'error');
+  }
+}
 // Initialize message pagination
 if (typeof initPagination === 'function') {
   initPagination();

@@ -6,8 +6,8 @@ from django.contrib.auth import get_user_model
 from django.contrib import messages
 from django.utils.text import slugify
 from .models import Room, Message, JoinRequest, Invitation
-
-
+from django.db.models import OuterRef, Subquery
+from datetime import timedelta
 @login_required
 def index(request):
     User = get_user_model()
@@ -56,20 +56,26 @@ def index(request):
                 'unread': unread_for(dm_room),
             })
 
-    # ── Public rooms with unread ───────────────
+    # ── Public rooms with unread and online count ───────────────
     public_rooms_data = []
     for room in public_rooms:
+        # Count online members in this room
+        online_members = room.members.filter(is_online=True).count()
         public_rooms_data.append({
             'room': room,
             'unread': unread_for(room),
+            'online_members': online_members,
         })
 
-    # ── Private groups (member) with unread ───────────────
+    # ── Private groups (member) with unread and online count ───────────────
     private_groups_data = []
     for room in my_private_groups:
+        # Count online members in this room
+        online_members = room.members.filter(is_online=True).count()
         private_groups_data.append({
             'room': room,
             'unread': unread_for(room),
+            'online_members': online_members,
         })
 
     # ── Discoverable private groups (non-member) ───────────
@@ -88,10 +94,13 @@ def index(request):
         ).values_list('room_id', flat=True)
     )
     for room in all_private_groups:
+        # Count online members in this room
+        online_members = room.members.filter(is_online=True).count()
         discoverable_groups_data.append({
             'room': room,
             'has_pending': room.id in user_pending_requests,
             'was_rejected': room.id in user_rejected_requests,
+            'online_members': online_members,
         })
 
     # ── Pending join requests FOR rooms where user is admin (admin view) ──
@@ -135,7 +144,15 @@ def index(request):
 
 @login_required
 def room(request, room_slug):
-    room = get_object_or_404(Room, slug=room_slug)
+    
+    last_message = Message.objects.filter(
+    room=OuterRef('pk')).order_by('-timestamp')
+
+    room = get_object_or_404(
+    Room.objects.annotate(
+        last_message_content=Subquery(last_message.values('content')[:1]),
+        last_message_time=Subquery(last_message.values('timestamp')[:1]),
+    ),slug=room_slug)
 
     if room.is_private and not room.members.filter(id=request.user.id).exists():
         raise Http404("Room not found")
@@ -144,8 +161,22 @@ def room(request, room_slug):
     messages_qs = room.messages.select_related('author', 'reply_to__author').order_by('-timestamp')[:50][::-1]
     room.messages.exclude(author=request.user).filter(is_read=False).update(is_read=True)
 
-    public_rooms = Room.objects.filter(is_private=False)
-    my_private_rooms = Room.objects.filter(is_private=True, members=request.user)
+    # Count online members in THIS room
+    room_online_members = room.members.filter(
+    last_seen__gte=timezone.now() - timedelta(minutes=1)
+).count()
+
+    public_rooms = Room.objects.filter(is_private=False).annotate(
+    last_message_content=Subquery(last_message.values('content')[:1]),
+    last_message_time=Subquery(last_message.values('timestamp')[:1]),
+)
+    my_private_rooms = Room.objects.filter(
+    is_private=True,
+    members=request.user
+).annotate(
+    last_message_content=Subquery(last_message.values('content')[:1]),
+    last_message_time=Subquery(last_message.values('timestamp')[:1]),
+)
 
     # Pending requests for this room (only admin can see)
     pending_requests = []
@@ -171,6 +202,7 @@ def room(request, room_slug):
         'pending_requests': pending_requests,
         'inviteable_users': inviteable_users,
         'is_admin': is_admin,
+        'room_online_members': room_online_members,
     })
 
 

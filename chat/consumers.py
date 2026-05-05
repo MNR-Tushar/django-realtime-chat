@@ -1,8 +1,10 @@
+
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Message, Room
-
+from django.utils import timezone
+from datetime import timedelta
 
 class ChatConsumer(AsyncWebsocketConsumer):
 
@@ -228,8 +230,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def get_online_count(self):
-        from django.contrib.auth import get_user_model
-        return get_user_model().objects.filter(is_online=True).count()
+        try:
+            room = Room.objects.get(slug=self.room_slug)
+            return room.members.filter(last_seen__gte=timezone.now() - timedelta(minutes=1)).count()
+        except Room.DoesNotExist:
+            return 0
 
     @database_sync_to_async
     def mark_message_as_read(self, message_id):
