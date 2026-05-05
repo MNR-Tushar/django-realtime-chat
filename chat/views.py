@@ -106,6 +106,9 @@ def index(request):
     existing_dm_user_ids = [d['other_user'].id for d in dm_list]
     other_users = User.objects.exclude(id=request.user.id).exclude(id__in=existing_dm_user_ids)
 
+    # All users for slideshow (exclude current user)
+    all_users = User.objects.exclude(id=request.user.id)
+
     # ── Pending invitations for this user ──
     my_pending_invitations = Invitation.objects.filter(
         invited_user=request.user,
@@ -121,6 +124,7 @@ def index(request):
         'discoverable_groups_data': discoverable_groups_data,
         'dm_list': dm_list,
         'other_users': other_users,
+        'all_users': all_users,
         'online_count': online_count,
         'messages_today': messages_today,
         'total_users': User.objects.count(),

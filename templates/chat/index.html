@@ -180,34 +180,11 @@
   animation: badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1);
 }
 @keyframes badgePop { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
-.dm-unread {
-  position: absolute; top: 6px; right: 6px;
-  min-width: 18px; height: 18px; padding: 0 5px;
-  background: var(--red); color: #fff; font-size: 10px; font-weight: 700;
-  border-radius: 9px; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 8px rgba(240,84,84,0.4);
-  animation: badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1);
-}
 
-/* ── DM section ── */
-.dm-section { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
-.dm-section::-webkit-scrollbar { height: 3px; }
-.dm-section::-webkit-scrollbar-thumb { background: #2b3a4d; border-radius: 2px; }
-.dm-card {
-  flex-shrink: 0; background: #1c2733; border: 1px solid #2b3a4d; border-radius: 14px;
-  padding: 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px;
-  text-decoration: none; color: #f0f4f8; transition: all 0.2s; min-width: 90px;
-  position: relative;
-}
-.dm-card:hover { border-color: #2ca5e0; background: #1a2a3a; }
-.dm-card.new-dm { border-style: dashed; opacity: 0.75; }
-.dm-card.new-dm:hover { opacity: 1; border-color: var(--primary); border-style: solid; }
-.dm-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #fff; position: relative; }
+/* ── DM slideshow status dots ── */
 .dm-status { position: absolute; bottom: 0; right: 0; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #1c2733; }
 .online  { background: #4dcd6e; }
 .offline { background: #7b9ab0; }
-.dm-name { font-size: 12px; font-weight: 600; color: #c5d1de; text-align: center; }
-.dm-label { font-size: 10px; color: var(--muted); }
 
 /* ── Pending Approvals Panel ── */
 .approvals-panel {
@@ -247,6 +224,12 @@
   display: flex; align-items: center; justify-content: center;
   font-size: 15px; font-weight: 700; color: #fff;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.approval-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .approval-info { flex: 1; }
 .approval-info strong { font-size: 13.5px; color: var(--text); display: block; }
@@ -291,6 +274,12 @@
   display: flex; align-items: center; justify-content: center;
   font-size: 15px; font-weight: 700; color: #fff;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.invitation-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .invitation-info { flex: 1; }
 .invitation-info strong { font-size: 13.5px; color: var(--text); display: block; }
@@ -391,12 +380,104 @@
 .rooms-grid.show-all .extra-item .room-card {
   display: flex !important;
 }
-.dm-section .extra-item {
-  display: none !important;
+
+/* ── DM Slideshow (Auto Carousel) ── */
+.dm-slideshow-container {
+  position: relative;
+  margin-bottom: 20px;
 }
-.dm-section.show-all .extra-item {
-  display: flex !important;
+.dm-slideshow {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  padding: 10px 0;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE */
 }
+.dm-slideshow::-webkit-scrollbar {
+  display: none;
+}
+.dm-slide {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  background: #1c2733;
+  border: 1px solid #2b3a4d;
+  border-radius: 14px;
+  text-decoration: none;
+  color: #f0f4f8;
+  transition: all 0.2s;
+  min-width: 90px;
+  scroll-snap-align: start;
+}
+.dm-slide:hover {
+  border-color: #2ca5e0;
+  background: #1a2a3a;
+}
+.dm-slide.online {
+  border-color: rgba(77,205,110,0.4);
+}
+.dm-slide-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.dm-slide-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.dm-slide-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #c5d1de;
+  text-align: center;
+}
+.dm-slide-status {
+  font-size: 10px;
+  color: var(--muted);
+}
+.dm-slide.online .dm-slide-status {
+  color: var(--green);
+}
+.dm-slide-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 2;
+}
+.dm-slide-btn:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.dm-slide-prev { left: -10px; }
+.dm-slide-next { right: -10px; }
 </style>
 {% endblock %}
 
@@ -440,7 +521,13 @@
       <div id="approvalsList">
         {% for jr in pending_approvals %}
         <div class="approval-card" id="approval-{{ jr.id }}">
-          <div class="approval-avatar">{{ jr.user.username|first|upper }}</div>
+          <div class="approval-avatar">
+            {% if jr.user.avatar %}
+              <img src="{{ jr.user.avatar.url }}" alt="{{ jr.user.username }}">
+            {% else %}
+              {{ jr.user.username|first|upper }}
+            {% endif %}
+          </div>
           <div class="approval-info">
             <strong>{{ jr.user.username }}</strong>
             <span>wants to join <em>{{ jr.room.name }}</em></span>
@@ -470,7 +557,13 @@
       <div id="invitationsList">
         {% for inv in my_pending_invitations %}
         <div class="invitation-card" id="invitation-{{ inv.id }}">
-          <div class="invitation-avatar">{{ inv.invited_by.username|first|upper }}</div>
+          <div class="invitation-avatar">
+            {% if inv.invited_by.avatar %}
+              <img src="{{ inv.invited_by.avatar.url }}" alt="{{ inv.invited_by.username }}">
+            {% else %}
+              {{ inv.invited_by.username|first|upper }}
+            {% endif %}
+          </div>
           <div class="invitation-info">
             <strong>{{ inv.invited_by.username }}</strong>
             <span>invited you to <em>{{ inv.room.name }}</em></span>
@@ -699,45 +792,29 @@
       <div class="section-title">Direct Messages</div>
       <span style="font-size:12px;color:var(--muted);">Only you can see these</span>
     </div>
-    <div class="dm-section" id="dmSection">
-
-      {% for dm in dm_list %}
-        {% cycle 'icon-blue' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as dm_color silent %}
-        <a href="{% url 'chat:room' dm.room.slug %}" class="dm-card{% if forloop.counter > 6 %} extra-item{% endif %}">
-          {% if dm.unread > 0 %}
-            <span class="dm-unread">{{ dm.unread }}</span>
-          {% endif %}
-          <div class="dm-avatar {{ dm_color }}">
-            {{ dm.other_user.username|first|upper }}
-            <span class="dm-status {% if dm.other_user.is_online %}online{% else %}offline{% endif %}"></span>
-          </div>
-          <div class="dm-name">{{ dm.other_user.username }}</div>
-          <div class="dm-label">Open chat</div>
-        </a>
-      {% endfor %}
-
-      {% for u in other_users %}
-        {% cycle 'icon-red' 'icon-blue' 'icon-purple' 'icon-green' as new_color silent %}
-        <a href="{% url 'chat:dm' u.username %}" class="dm-card new-dm{% if forloop.counter > 6 %} extra-item{% endif %}">
-          <div class="dm-avatar {{ new_color }}">
-            {{ u.username|first|upper }}
-            <span class="dm-status {% if u.is_online %}online{% else %}offline{% endif %}"></span>
-          </div>
-          <div class="dm-name">{{ u.username }}</div>
-          <div class="dm-label">Start chat</div>
-        </a>
-      {% endfor %}
-
-      {% if not dm_list and not other_users %}
-        <p style="font-size:13px;color:#7b9ab0;">No other users yet.</p>
-      {% endif %}
-
+    {# ── User Slideshow (Auto Carousel) ── #}
+    <div class="dm-slideshow-container">
+      <div class="dm-slideshow" id="dmSlideshow">
+        {% for u in all_users %}
+          {% cycle 'icon-blue' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as slide_color silent %}
+          <a href="{% url 'chat:dm' u.username %}" class="dm-slide {% if u.is_online %}online{% endif %}">
+            <div class="dm-slide-avatar {{ slide_color }}">
+              {% if u.avatar %}
+                <img src="{{ u.avatar.url }}" alt="{{ u.username }}">
+              {% else %}
+                {{ u.username|first|upper }}
+              {% endif %}
+              <span class="dm-status {% if u.is_online %}online{% else %}offline{% endif %}"></span>
+            </div>
+            <div class="dm-slide-name">{{ u.username }}</div>
+            <div class="dm-slide-status">{% if u.is_online %}online{% else %}{{ u.get_last_seen_text }}{% endif %}</div>
+          </a>
+        {% endfor %}
+      </div>
+      <button class="dm-slide-btn dm-slide-prev" onclick="moveSlide(-1)">‹</button>
+      <button class="dm-slide-btn dm-slide-next" onclick="moveSlide(1)">›</button>
     </div>
-    {% if dm_list|length > 6 or other_users|length > 6 %}
-      <button class="show-more-btn" onclick="toggleSection('dmSection', this)">
-        Show more <span class="arrow">▼</span>
-      </button>
-    {% endif %}
+
     {% endif %}
 
   </div>
@@ -775,6 +852,59 @@
 {% block extra_js %}
 <script>
 const CSRF_TOKEN = "{{ csrf_token }}";
+
+// ── DM Slideshow (Auto Carousel) ──────────────────────────────────────
+let slideIndex = 0;
+let slideInterval;
+const slideDelay = 3000; // 3 seconds
+
+function initSlideshow() {
+  const slideshow = document.getElementById('dmSlideshow');
+  if (!slideshow || slideshow.children.length === 0) return;
+
+  const slides = slideshow.querySelectorAll('.dm-slide');
+  if (slides.length <= 5) return; // Don't auto-scroll if few users
+
+  // Start auto-slideshow
+  startSlideshow();
+
+  // Pause on hover
+  slideshow.addEventListener('mouseenter', stopSlideshow);
+  slideshow.addEventListener('mouseleave', startSlideshow);
+}
+
+function startSlideshow() {
+  stopSlideshow();
+  slideInterval = setInterval(() => moveSlide(1), slideDelay);
+}
+
+function stopSlideshow() {
+  if (slideInterval) clearInterval(slideInterval);
+}
+
+function moveSlide(direction) {
+  const slideshow = document.getElementById('dmSlideshow');
+  if (!slideshow) return;
+
+  const slides = slideshow.querySelectorAll('.dm-slide');
+  if (slides.length === 0) return;
+
+  slideIndex += direction;
+
+  // Loop around
+  if (slideIndex < 0) slideIndex = slides.length - 1;
+  if (slideIndex >= slides.length) slideIndex = 0;
+
+  // Scroll to the slide
+  const slideWidth = slides[0].offsetWidth + 10; // width + gap
+  slideshow.scrollTo({
+    left: slideIndex * slideWidth,
+    behavior: 'smooth'
+  });
+}
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', initSlideshow);
 
 // ── Toggle Show More ──────────────────────────────────────────────────
 function toggleSection(gridId, btn) {

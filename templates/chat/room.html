@@ -270,9 +270,26 @@
           {% endif %}
         </h2>
         <div class="chat-header-sub">
-          <span class="online-dot"></span>
-          <span id="onlineCount">0</span> online
-          &nbsp;·&nbsp;
+          {% if room.slug|slice:":3" == "dm-" %}
+            {# For DM: show other user's status #}
+            {% for member in room.members.all %}
+              {% if member != request.user %}
+                {% if member.is_online %}
+                  <span class="online-dot"></span>
+                  <span style="color:var(--green);">online</span>
+                {% else %}
+                  <span class="online-dot" style="background:var(--muted);"></span>
+                  <span style="color:var(--muted);">last seen {{ member.get_last_seen_text }}</span>
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            &nbsp;·&nbsp;
+          {% else %}
+            {# For group rooms: show online count #}
+            <span class="online-dot"></span>
+            <span id="onlineCount">0</span> online
+            &nbsp;·&nbsp;
+          {% endif %}
           <span id="connectionStatus" class="status connecting">Connecting...</span>
         </div>
       </div>
