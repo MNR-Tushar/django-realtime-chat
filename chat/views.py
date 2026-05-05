@@ -517,6 +517,19 @@ def room_settings(request, room_slug):
             messages.success(request, 'Room updated successfully!')
             return redirect('chat:room_settings', room_slug=room_slug)
 
+        elif action == 'change_avatar':
+            avatar = request.FILES.get('avatar')
+            if avatar:
+                # Delete old avatar if exists
+                if room.avatar:
+                    room.avatar.delete(save=False)
+                room.avatar = avatar
+                room.save(update_fields=['avatar', 'updated_at'])
+                messages.success(request, 'Room avatar updated successfully!')
+            else:
+                messages.error(request, 'Please select an image to upload.')
+            return redirect('chat:room_settings', room_slug=room_slug)
+
         elif action == 'delete':
             room.delete()
             messages.success(request, f'Room deleted.')

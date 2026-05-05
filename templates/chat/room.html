@@ -204,7 +204,13 @@
     <div class="room-list" id="roomList">
       {% if room.is_private %}
         <a href="{% url 'chat:room' room.slug %}" class="room-item active">
-          <div class="room-avatar">🔒</div>
+          <div class="room-avatar">
+            {% if room.avatar %}
+              <img src="{{ room.avatar.url }}" alt="{{ room.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+            {% else %}
+              🔒
+            {% endif %}
+          </div>
           <div class="room-meta">
             <div class="room-name">
               {% if room.slug|slice:":3" == "dm-" %}
@@ -240,7 +246,13 @@
 
     <div class="chat-header">
       <a href="{% url 'chat:index' %}" class="back-btn" title="Back">←</a>
-      <div class="room-avatar-sm">{% if room.is_private %}🔒{% else %}💬{% endif %}</div>
+      <div class="room-avatar-sm">
+        {% if room.avatar %}
+          <img src="{{ room.avatar.url }}" alt="{{ room.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+        {% else %}
+          {% if room.is_private %}🔒{% else %}💬{% endif %}
+        {% endif %}
+      </div>
       <div class="chat-header-info">
         <h2>
           {% if room.is_private %}

@@ -19,6 +19,7 @@ class Room(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    avatar = models.ImageField(upload_to='room_avatars/', blank=True, null=True)
     is_private = models.BooleanField(default=False)
 
     @classmethod

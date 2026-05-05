@@ -374,7 +374,13 @@
 
     {# ── Hero ── #}
     <div class="settings-hero">
-      <div class="settings-room-icon">🔒</div>
+      <div class="settings-room-icon">
+        {% if room.avatar %}
+          <img src="{{ room.avatar.url }}" alt="{{ room.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 18px;">
+        {% else %}
+          🔒
+        {% endif %}
+      </div>
       <div class="settings-hero-info">
         <h1>{{ room.name }}</h1>
         <span class="room-type">Private Group</span>
@@ -401,6 +407,32 @@
           </div>
         </div>
       </div>
+    </div>
+
+    {# ── Room Avatar ── #}
+    <div class="settings-card">
+      <div class="settings-card-title">Room Avatar</div>
+      <div class="avatar-preview" style="margin-bottom: 16px;">
+        <div style="width: 100px; height: 100px; border-radius: 20px; background: linear-gradient(135deg, #a855f7, #6b21a8); display: flex; align-items: center; justify-content: center; font-size: 40px; overflow: hidden;">
+          {% if room.avatar %}
+            <img src="{{ room.avatar.url }}" alt="{{ room.name }}" style="width: 100%; height: 100%; object-fit: cover;">
+          {% else %}
+            🔒
+          {% endif %}
+        </div>
+      </div>
+      <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="change_avatar">
+        <div class="sf-group">
+          <label>Upload New Avatar</label>
+          <input type="file" name="avatar" accept="image/*" required style="padding: 8px 0;">
+          <div class="field-hint">Recommended: 200x200px or larger, square format.</div>
+        </div>
+        <div class="sf-actions">
+          <button type="submit" class="btn btn-primary">Upload Avatar</button>
+        </div>
+      </form>
     </div>
 
     {# ── Edit Room ── #}

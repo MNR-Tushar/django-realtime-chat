@@ -494,7 +494,13 @@
       <div class="section-title">Featured Room</div>
     </div>
     <a href="{% url 'chat:room' featured.slug %}" class="featured-card">
-      <div class="featured-icon">💬</div>
+      <div class="featured-icon">
+        {% if featured.avatar %}
+          <img src="{{ featured.avatar.url }}" alt="{{ featured.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 18px;">
+        {% else %}
+          💬
+        {% endif %}
+      </div>
       <div class="featured-info">
         <h3># {{ featured.name }}</h3>
         <p>{{ featured.description|default:"The main hub — say hello, share updates, and keep everyone in the loop." }}</p>
@@ -519,7 +525,13 @@
         {% cycle '💬' '🔥' '🛠️' '🎯' '🌟' '⚡' as room_icon silent %}
         <a href="{% url 'chat:room' item.room.slug %}" class="room-card{% if forloop.counter > 6 %} extra-item{% endif %}">
           <div class="room-top">
-            <div class="room-icon-wrap {{ icon_class }}">{{ room_icon }}</div>
+            <div class="room-icon-wrap {{ icon_class }}">
+              {% if item.room.avatar %}
+                <img src="{{ item.room.avatar.url }}" alt="{{ item.room.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 14px;">
+              {% else %}
+                {{ room_icon }}
+              {% endif %}
+            </div>
             <div class="room-tags">
               <span class="room-tag tag-active">Active</span>
               {% if item.unread > 0 %}
@@ -571,7 +583,13 @@
         <div style="position:relative;" class="{% if forloop.counter > 6 %}extra-item{% endif %}">
           <a href="{% url 'chat:room' item.room.slug %}" class="room-card private-group">
             <div class="room-top">
-              <div class="room-icon-wrap icon-purple">🔒</div>
+              <div class="room-icon-wrap icon-purple">
+                {% if item.room.avatar %}
+                  <img src="{{ item.room.avatar.url }}" alt="{{ item.room.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 14px;">
+                {% else %}
+                  🔒
+                {% endif %}
+              </div>
               <div class="room-tags">
                 <span class="room-tag tag-private">Private</span>
                 {% if item.unread > 0 %}
@@ -618,7 +636,13 @@
       {% for item in discoverable_groups_data %}
         <div class="room-card locked-room{% if forloop.counter > 6 %} extra-item{% endif %}" id="locked-room-{{ item.room.slug }}">
           <div class="room-top">
-            <div class="room-icon-wrap icon-purple">🔐</div>
+            <div class="room-icon-wrap icon-purple">
+              {% if item.room.avatar %}
+                <img src="{{ item.room.avatar.url }}" alt="{{ item.room.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 14px;">
+              {% else %}
+                🔐
+              {% endif %}
+            </div>
             <div class="room-tags">
               {% if item.has_pending %}
                 <span class="room-tag tag-pending">⏳ Pending</span>
