@@ -449,6 +449,40 @@ def my_invitations(request):
 # ── Room Settings ─────────────────────────────────────────────────────────
 
 @login_required
+def remove_member(request, room_slug):
+    """Room admin removes a member from the room."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    room = get_object_or_404(Room, slug=room_slug, is_private=True)
+
+    # Only admin can remove members
+    if room.admin != request.user:
+        return JsonResponse({'error': 'Only room admin can remove members'}, status=403)
+
+    username = request.POST.get('username', '').strip()
+    if not username:
+        return JsonResponse({'error': 'Username is required'}, status=400)
+
+    User = get_user_model()
+    try:
+        member = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return JsonResponse({'error': f'User "{username}" not found'}, status=404)
+
+    # Cannot remove admin (self)
+    if member == room.admin:
+        return JsonResponse({'error': 'Cannot remove the room admin'}, status=400)
+
+    # Check if user is a member
+    if not room.members.filter(id=member.id).exists():
+        return JsonResponse({'error': f'{username} is not a member of this room'}, status=400)
+
+    room.members.remove(member)
+    return JsonResponse({'ok': True, 'message': f'{username} has been removed from the room'})
+
+
+@login_required
 def room_settings(request, room_slug):
     """Room settings page — edit name/description or delete room (admin only)."""
     room = get_object_or_404(Room, slug=room_slug, is_private=True)

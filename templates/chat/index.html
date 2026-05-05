@@ -349,6 +349,54 @@
   border-color: #a855f7;
   transform: translateY(-1px);
 }
+
+/* ── Show More Button ── */
+.show-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(44,165,224,0.3);
+  background: rgba(44,165,224,0.04);
+  color: #2ca5e0;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+.show-more-btn:hover {
+  background: rgba(44,165,224,0.10);
+  border-color: #2ca5e0;
+  border-style: solid;
+}
+.show-more-btn .arrow {
+  display: inline-block;
+  transition: transform 0.2s;
+}
+.show-more-btn.expanded .arrow {
+  transform: rotate(180deg);
+}
+.rooms-grid .extra-item {
+  display: none !important;
+}
+.rooms-grid.show-all .extra-item {
+  display: block !important;
+}
+.rooms-grid.show-all .extra-item.room-card,
+.rooms-grid.show-all .extra-item .room-card {
+  display: flex !important;
+}
+.dm-section .extra-item {
+  display: none !important;
+}
+.dm-section.show-all .extra-item {
+  display: flex !important;
+}
 </style>
 {% endblock %}
 
@@ -465,11 +513,11 @@
       <span style="font-size:12px;color:var(--muted);">{{ rooms.count }} room{% if rooms.count != 1 %}s{% endif %}</span>
     </div>
 
-    <div class="rooms-grid">
+    <div class="rooms-grid" id="publicRoomsGrid">
       {% for item in public_rooms_data %}
         {% cycle 'icon-blue' 'icon-red' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as icon_class silent %}
         {% cycle '💬' '🔥' '🛠️' '🎯' '🌟' '⚡' as room_icon silent %}
-        <a href="{% url 'chat:room' item.room.slug %}" class="room-card">
+        <a href="{% url 'chat:room' item.room.slug %}" class="room-card{% if forloop.counter > 6 %} extra-item{% endif %}">
           <div class="room-top">
             <div class="room-icon-wrap {{ icon_class }}">{{ room_icon }}</div>
             <div class="room-tags">
@@ -503,6 +551,11 @@
         </div>
       {% endfor %}
     </div>
+    {% if public_rooms_data|length > 6 %}
+      <button class="show-more-btn" onclick="toggleSection('publicRoomsGrid', this)">
+        Show {{ public_rooms_data|length|add:"-6" }} more room{{ public_rooms_data|length|add:"-6"|pluralize }} <span class="arrow">▼</span>
+      </button>
+    {% endif %}
 
     {# ── My Private Groups (member) ── #}
     {% if private_groups_data %}
@@ -513,9 +566,9 @@
         <button class="create-room-btn" onclick="openCreateRoomModal()">+ Create Room</button>
       </div>
     </div>
-    <div class="rooms-grid">
+    <div class="rooms-grid" id="privateGroupsGrid">
       {% for item in private_groups_data %}
-        <div style="position:relative;">
+        <div style="position:relative;" class="{% if forloop.counter > 6 %}extra-item{% endif %}">
           <a href="{% url 'chat:room' item.room.slug %}" class="room-card private-group">
             <div class="room-top">
               <div class="room-icon-wrap icon-purple">🔒</div>
@@ -548,6 +601,11 @@
         </div>
       {% endfor %}
     </div>
+    {% if private_groups_data|length > 6 %}
+      <button class="show-more-btn" onclick="toggleSection('privateGroupsGrid', this)">
+        Show {{ private_groups_data|length|add:"-6" }} more group{{ private_groups_data|length|add:"-6"|pluralize }} <span class="arrow">▼</span>
+      </button>
+    {% endif %}
     {% endif %}
 
     {# ── Discoverable Private Groups (non-member) ── #}
@@ -556,9 +614,9 @@
       <div class="section-title">🔐 Private Groups</div>
       <span style="font-size:12px;color:var(--muted);">Request to join</span>
     </div>
-    <div class="rooms-grid">
+    <div class="rooms-grid" id="discoverableGrid">
       {% for item in discoverable_groups_data %}
-        <div class="room-card locked-room" id="locked-room-{{ item.room.slug }}">
+        <div class="room-card locked-room{% if forloop.counter > 6 %} extra-item{% endif %}" id="locked-room-{{ item.room.slug }}">
           <div class="room-top">
             <div class="room-icon-wrap icon-purple">🔐</div>
             <div class="room-tags">
@@ -604,6 +662,11 @@
         </div>
       {% endfor %}
     </div>
+    {% if discoverable_groups_data|length > 6 %}
+      <button class="show-more-btn" onclick="toggleSection('discoverableGrid', this)">
+        Show {{ discoverable_groups_data|length|add:"-6" }} more group{{ discoverable_groups_data|length|add:"-6"|pluralize }} <span class="arrow">▼</span>
+      </button>
+    {% endif %}
     {% endif %}
 
     {# ── Direct Messages ── #}
@@ -612,11 +675,11 @@
       <div class="section-title">Direct Messages</div>
       <span style="font-size:12px;color:var(--muted);">Only you can see these</span>
     </div>
-    <div class="dm-section">
+    <div class="dm-section" id="dmSection">
 
       {% for dm in dm_list %}
         {% cycle 'icon-blue' 'icon-green' 'icon-purple' 'icon-yellow' 'icon-pink' as dm_color silent %}
-        <a href="{% url 'chat:room' dm.room.slug %}" class="dm-card">
+        <a href="{% url 'chat:room' dm.room.slug %}" class="dm-card{% if forloop.counter > 6 %} extra-item{% endif %}">
           {% if dm.unread > 0 %}
             <span class="dm-unread">{{ dm.unread }}</span>
           {% endif %}
@@ -631,7 +694,7 @@
 
       {% for u in other_users %}
         {% cycle 'icon-red' 'icon-blue' 'icon-purple' 'icon-green' as new_color silent %}
-        <a href="{% url 'chat:dm' u.username %}" class="dm-card new-dm">
+        <a href="{% url 'chat:dm' u.username %}" class="dm-card new-dm{% if forloop.counter > 6 %} extra-item{% endif %}">
           <div class="dm-avatar {{ new_color }}">
             {{ u.username|first|upper }}
             <span class="dm-status {% if u.is_online %}online{% else %}offline{% endif %}"></span>
@@ -646,6 +709,11 @@
       {% endif %}
 
     </div>
+    {% if dm_list|length > 6 or other_users|length > 6 %}
+      <button class="show-more-btn" onclick="toggleSection('dmSection', this)">
+        Show more <span class="arrow">▼</span>
+      </button>
+    {% endif %}
     {% endif %}
 
   </div>
@@ -684,6 +752,27 @@
 <script>
 const CSRF_TOKEN = "{{ csrf_token }}";
 
+// ── Toggle Show More ──────────────────────────────────────────────────
+function toggleSection(gridId, btn) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  grid.classList.toggle('show-all');
+  btn.classList.toggle('expanded');
+  const isExpanded = grid.classList.contains('show-all');
+  const arrow = btn.querySelector('.arrow');
+  // Update text: keep the arrow span, replace the text before it
+  const textNode = btn.childNodes[0];
+  if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+    textNode.textContent = isExpanded ? 'Show less ' : 'Show more ';
+  } else if (textNode) {
+    // Fallback: rebuild button content
+    const arrowEl = btn.querySelector('.arrow');
+    btn.textContent = '';
+    btn.appendChild(document.createTextNode(isExpanded ? 'Show less ' : 'Show more '));
+    if (arrowEl) btn.appendChild(arrowEl);
+  }
+}
+
 // ── Toast ──────────────────────────────────────────────────────────
 function showToast(title, body, type) {
   const c = document.getElementById('toastContainer');
@@ -705,7 +794,7 @@ async function sendJoinRequest(roomSlug, btn) {
   try {
     const res = await fetch(`/room/${roomSlug}/join-request/`, {
       method: 'POST',
-      headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+      headers: { 'X-CSRFToken': CSRF_TOKEN },
     });
     const data = await res.json();
     if (data.ok) {

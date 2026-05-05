@@ -11,6 +11,7 @@ urlpatterns = [
 
     # ── Room Settings ──────────────────────────────────────────────
     path('room/<slug:room_slug>/settings/', views.room_settings, name='room_settings'),
+    path('room/<slug:room_slug>/remove-member/', views.remove_member, name='remove_member'),
 
     # ── Join Request URLs ──────────────────────────────────────────
     path('room/<slug:room_slug>/join-request/', views.request_join, name='request_join'),
