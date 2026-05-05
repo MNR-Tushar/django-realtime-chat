@@ -468,6 +468,8 @@
                 {{ member.username }}
                 {% if member.is_online %}
                   <span style="font-size:10px;color:var(--green);margin-left:4px;">● online</span>
+                {% else %}
+                  <span style="font-size:10px;color:var(--muted);margin-left:4px;">last seen {{ member.get_last_seen_text }}</span>
                 {% endif %}
               </span>
             </div>
@@ -477,7 +479,14 @@
                 {{ member.username|first|upper }}
                 <span class="user-status-dot {% if member.is_online %}online{% else %}offline{% endif %}"></span>
               </div>
-              <span>{{ member.username }}</span>
+              <span>
+                {{ member.username }}
+                {% if member.is_online %}
+                  <span style="font-size:10px;color:var(--green);margin-left:4px;">● online</span>
+                {% else %}
+                  <span style="font-size:10px;color:var(--muted);margin-left:4px;">last seen {{ member.get_last_seen_text }}</span>
+                {% endif %}
+              </span>
             </a>
           {% endif %}
         {% endif %}
@@ -527,12 +536,18 @@
   const CURRENT_USER = "{{ request.user.username }}";
   const UPLOAD_URL   = "{% url 'chat:upload_file' room.slug %}";
   const CSRF_TOKEN   = "{{ csrf_token }}";
+  const OLDER_MESSAGES_URL = "{% url 'chat:load_older_messages' room.slug %}";
 </script>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{% static 'js/chat.js' %}"></script>
 <script>
+// Initialize message pagination
+if (typeof initPagination === 'function') {
+  initPagination();
+}
+
 // ── Invite Modal ──────────────────────────────────────────────────
 function openInviteModal() {
   const m = document.getElementById('inviteModal');

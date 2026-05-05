@@ -136,7 +136,8 @@ def room(request, room_slug):
     if room.is_private and not room.members.filter(id=request.user.id).exists():
         raise Http404("Room not found")
 
-    messages_qs = room.messages.select_related('author', 'reply_to__author')[:50]
+    # Get last 50 messages (most recent)
+    messages_qs = room.messages.select_related('author', 'reply_to__author').order_by('-timestamp')[:50][::-1]
     room.messages.exclude(author=request.user).filter(is_read=False).update(is_read=True)
 
     public_rooms = Room.objects.filter(is_private=False)
@@ -545,4 +546,63 @@ def room_settings(request, room_slug):
         'total_messages': total_messages,
         'pending_count': pending_count,
         'member_count': member_count,
+    })
+
+
+@login_required
+def load_older_messages(request, room_slug):
+    """API endpoint to load older messages (pagination)."""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET only'}, status=405)
+
+    room = get_object_or_404(Room, slug=room_slug)
+
+    if room.is_private and not room.members.filter(id=request.user.id).exists():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+
+    # Get the oldest message ID currently loaded
+    before_id = request.GET.get('before_id')
+    if not before_id:
+        return JsonResponse({'error': 'before_id is required'}, status=400)
+
+    try:
+        before_id = int(before_id)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid before_id'}, status=400)
+
+    # Get the timestamp of the reference message
+    try:
+        ref_message = Message.objects.get(id=before_id, room=room)
+    except Message.DoesNotExist:
+        return JsonResponse({'error': 'Message not found'}, status=404)
+
+    # Get 50 messages older than the reference message
+    messages_qs = room.messages.filter(
+        timestamp__lt=ref_message.timestamp
+    ).select_related('author', 'reply_to__author').order_by('-timestamp')[:50]
+
+    messages_data = []
+    for msg in messages_qs[::-1]:  # Reverse to get chronological order
+        msg_data = {
+            'id': msg.id,
+            'content': msg.content,
+            'author': msg.author.username,
+            'timestamp': msg.timestamp.strftime('%H:%M'),
+            'is_edited': msg.is_edited,
+            'is_read': msg.is_read,
+            'is_own': msg.author == request.user,
+            'file_url': msg.file.url if msg.file else None,
+            'file_type': msg.file_type,
+        }
+        if msg.reply_to:
+            msg_data['reply_to'] = {
+                'id': msg.reply_to.id,
+                'username': msg.reply_to.author.username,
+                'text': msg.reply_to.content[:80] if not msg.reply_to.file else f'📎 {msg.reply_to.content}',
+            }
+        messages_data.append(msg_data)
+
+    return JsonResponse({
+        'messages': messages_data,
+        'has_more': room.messages.filter(timestamp__lt=ref_message.timestamp).count() > 50,
     })

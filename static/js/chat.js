@@ -61,6 +61,207 @@ let replyingToText     = null;
 let searchResults  = [];   // [{msgEl, textNode, start, end}] — one entry per match
 let searchCurrent  = -1;   // index into searchResults
 
+// Pagination state
+let isLoadingOlder = false;
+let hasMoreMessages = true;
+let oldestMessageId = null;
+
+// ── Message Pagination ────────────────────────
+function initPagination() {
+  // Find the oldest message ID from the initial load
+  const firstMsg = chatMessages.querySelector('.message[data-message-id]');
+  if (firstMsg) {
+    oldestMessageId = parseInt(firstMsg.dataset.messageId);
+  }
+
+  // Add scroll listener
+  chatMessages.addEventListener('scroll', handleScroll);
+}
+
+function handleScroll() {
+  if (isLoadingOlder || !hasMoreMessages) return;
+
+  // Check if scrolled near the top (within 100px)
+  if (chatMessages.scrollTop < 100) {
+    loadOlderMessages();
+  }
+}
+
+function showLoadingIndicator() {
+  let loader = document.getElementById('paginationLoader');
+  if (!loader) {
+    loader = document.createElement('div');
+    loader.id = 'paginationLoader';
+    loader.innerHTML = `
+      <div style="text-align:center;padding:16px;color:var(--muted);font-size:12px;">
+        <span class="typing-dots"><span></span><span></span><span></span></span>
+        Loading older messages...
+      </div>
+    `;
+    chatMessages.insertBefore(loader, chatMessages.firstChild);
+  }
+  loader.style.display = 'block';
+}
+
+function hideLoadingIndicator() {
+  const loader = document.getElementById('paginationLoader');
+  if (loader) loader.style.display = 'none';
+}
+
+async function loadOlderMessages() {
+  if (!oldestMessageId || !window.OLDER_MESSAGES_URL) return;
+
+  isLoadingOlder = true;
+  showLoadingIndicator();
+
+  try {
+    const url = `${window.OLDER_MESSAGES_URL}?before_id=${oldestMessageId}`;
+    const res = await fetch(url, {
+      headers: { 'X-CSRFToken': window.CSRF_TOKEN || '' }
+    });
+
+    if (!res.ok) {
+      hideLoadingIndicator();
+      isLoadingOlder = false;
+      return;
+    }
+
+    const data = await res.json();
+
+    if (data.messages && data.messages.length > 0) {
+      // Remember current scroll position
+      const oldHeight = chatMessages.scrollHeight;
+      const oldScrollTop = chatMessages.scrollTop;
+
+      // Prepend messages (they come in chronological order)
+      data.messages.forEach(msg => {
+        prependMessage({
+          content: msg.content,
+          username: msg.author,
+          timestamp: msg.timestamp,
+          messageId: msg.id,
+          fileUrl: msg.file_url || null,
+          fileType: msg.file_type || null,
+          replyTo: msg.reply_to || null,
+          own: msg.is_own,
+          isEdited: msg.is_edited,
+        });
+      });
+
+      // Update oldest message ID
+      oldestMessageId = data.messages[0].id;
+
+      // Maintain scroll position
+      const newHeight = chatMessages.scrollHeight;
+      chatMessages.scrollTop = newHeight - oldHeight + oldScrollTop;
+
+      hasMoreMessages = data.has_more;
+    } else {
+      hasMoreMessages = false;
+    }
+
+    if (!hasMoreMessages) {
+      showNoMoreMessages();
+    }
+  } catch (err) {
+    console.error('Failed to load older messages:', err);
+  } finally {
+    hideLoadingIndicator();
+    isLoadingOlder = false;
+  }
+}
+
+function showNoMoreMessages() {
+  let noMore = document.getElementById('noMoreMessages');
+  if (!noMore) {
+    noMore = document.createElement('div');
+    noMore.id = 'noMoreMessages';
+    noMore.style.cssText = 'text-align:center;padding:12px;color:var(--muted);font-size:11px;';
+    noMore.textContent = 'No more messages';
+    chatMessages.insertBefore(noMore, chatMessages.firstChild);
+  }
+}
+
+function prependMessage({ content, username, timestamp, messageId, fileUrl, fileType, replyTo, own, isEdited }) {
+  const isGrouped = username === lastAuthor && !replyTo;
+
+  const div = document.createElement('div');
+  div.className = `message ${own ? 'own' : ''} ${isGrouped ? 'grouped' : ''}`;
+  div.setAttribute('data-message-id', messageId);
+  div.setAttribute('data-is-own', own ? 'true' : 'false');
+
+  // Reply quote HTML
+  let replyHtml = '';
+  if (replyTo) {
+    const safeUser = escapeHtml(replyTo.username);
+    const safeText = escapeHtml(replyTo.text.substring(0, 80));
+    replyHtml = `
+      <div class="reply-quote" onclick="scrollToMessage(${replyTo.id})">
+        <span class="reply-quote-author">↩ ${safeUser}</span>
+        <span class="reply-quote-text">${safeText}</span>
+      </div>`;
+  }
+
+  let bubbleInner = '';
+  if (fileUrl) {
+    if (fileType === 'image') {
+      bubbleInner = `<img src="${fileUrl}" class="msg-image"
+                       onclick="window.open(this.src)" alt="${escapeHtml(content)}">`;
+    } else {
+      bubbleInner = `<a href="${fileUrl}" class="msg-file" download>📎 ${escapeHtml(content)}</a>`;
+    }
+  } else {
+    bubbleInner = `<span class="msg-text">${escapeHtml(content)}</span>`;
+  }
+
+  const editedBadge = isEdited ? '<span class="edited-badge">edited</span>' : '';
+
+  const replyAction = `<button class="msg-action-btn reply-btn"
+      onclick="startReply('${messageId}', '${escapeHtml(username)}', this)"
+      title="Reply">↩</button>`;
+
+  const ownActions = own ? `
+    ${!fileUrl ? `<button class="msg-action-btn edit-btn"
+        onclick="startEdit('${messageId}')" title="Edit">✏️</button>` : ''}
+    <button class="msg-action-btn delete-btn"
+        onclick="confirmDelete('${messageId}')" title="Delete">🗑️</button>` : '';
+
+  div.innerHTML = `
+    <div class="message-author">${escapeHtml(username)}</div>
+    <div class="message-bubble">
+      ${replyHtml}
+      ${bubbleInner}
+      <span class="reaction-trigger" title="Add reaction">😊</span>
+    </div>
+    <div class="message-footer">
+      <span class="message-time">${timestamp}</span>
+      ${editedBadge}
+      ${own ? '<span class="read-badge">✓</span>' : ''}
+      <span class="msg-actions">
+        ${replyAction}
+        ${ownActions}
+      </span>
+    </div>
+  `;
+
+  // Reaction trigger
+  const trigger = div.querySelector('.reaction-trigger');
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showReactionPicker(trigger, messageId);
+  });
+
+  // Insert at the beginning (after the date divider)
+  const dateDivider = chatMessages.querySelector('.date-divider');
+  if (dateDivider) {
+    dateDivider.after(div);
+  } else {
+    chatMessages.insertBefore(div, chatMessages.firstChild);
+  }
+
+  lastAuthor = username;
+}
+
 // ── Theme ─────────────────────────────────────
 const savedTheme = localStorage.getItem('chat-theme') || 'dark';
 if (savedTheme === 'light') document.body.classList.add('light-mode');

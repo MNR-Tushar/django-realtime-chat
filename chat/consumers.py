@@ -286,8 +286,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def set_user_online(self, status):
+        from django.utils import timezone
         self.user.is_online = status
-        self.user.save(update_fields=['is_online'])
+        if not status:
+            self.user.last_seen = timezone.now()
+        self.user.save(update_fields=['is_online', 'last_seen'])
 
     @database_sync_to_async
     def delete_message(self, message_id):

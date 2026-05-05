@@ -13,6 +13,9 @@ urlpatterns = [
     path('room/<slug:room_slug>/settings/', views.room_settings, name='room_settings'),
     path('room/<slug:room_slug>/remove-member/', views.remove_member, name='remove_member'),
 
+    # ── Message Pagination ──────────────────────────────────────────
+    path('room/<slug:room_slug>/older-messages/', views.load_older_messages, name='load_older_messages'),
+
     # ── Join Request URLs ──────────────────────────────────────────
     path('room/<slug:room_slug>/join-request/', views.request_join, name='request_join'),
     path('room/<slug:room_slug>/join-request/cancel/', views.cancel_join_request, name='cancel_join_request'),
