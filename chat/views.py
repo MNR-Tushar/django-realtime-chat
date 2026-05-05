@@ -444,3 +444,58 @@ def my_invitations(request):
     return render(request, 'chat/partials/my_invitations.html', {
         'invitations': invitations,
     })
+
+
+# ── Room Settings ─────────────────────────────────────────────────────────
+
+@login_required
+def room_settings(request, room_slug):
+    """Room settings page — edit name/description or delete room (admin only)."""
+    room = get_object_or_404(Room, slug=room_slug, is_private=True)
+
+    # Only admin can access settings
+    if room.admin != request.user:
+        raise Http404("Access denied")
+
+    # DM rooms have no settings
+    if room.slug.startswith('dm-'):
+        raise Http404("DM rooms have no settings")
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'edit':
+            name = request.POST.get('name', '').strip()
+            description = request.POST.get('description', '').strip()
+
+            if not name or len(name) < 3:
+                messages.error(request, 'Room name must be at least 3 characters.')
+                return redirect('chat:room_settings', room_slug=room_slug)
+
+            # Check unique name (excluding this room)
+            if Room.objects.filter(name=name).exclude(slug=room_slug).exists():
+                messages.error(request, f'Room name "{name}" is already taken.')
+                return redirect('chat:room_settings', room_slug=room_slug)
+
+            room.name = name
+            room.description = description
+            room.save(update_fields=['name', 'description', 'updated_at'])
+            messages.success(request, 'Room updated successfully!')
+            return redirect('chat:room_settings', room_slug=room_slug)
+
+        elif action == 'delete':
+            room.delete()
+            messages.success(request, f'Room deleted.')
+            return redirect('chat:index')
+
+    # Stats
+    total_messages = room.messages.count()
+    pending_count = JoinRequest.objects.filter(room=room, status='pending').count()
+    member_count = room.members.count()
+
+    return render(request, 'chat/room_settings.html', {
+        'room': room,
+        'total_messages': total_messages,
+        'pending_count': pending_count,
+        'member_count': member_count,
+    })

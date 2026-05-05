@@ -103,6 +103,8 @@
 .icon-yellow { background: linear-gradient(135deg, var(--yellow), #a07010); }
 .icon-pink   { background: linear-gradient(135deg, #ec4899, #9d174d); }
 .room-tags { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.room-settings-btn { position: absolute; top: 12px; right: 12px; font-size: 18px; opacity: 0.5; transition: opacity 0.2s, transform 0.2s; cursor: pointer; z-index: 2; line-height: 1; }
+.room-settings-btn:hover { opacity: 1; transform: rotate(90deg); }
 .room-tag { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
 .tag-active   { background: rgba(77,205,110,0.15); color: var(--green); }
 .tag-private  { background: rgba(168,85,247,0.15); color: #a855f7; }
@@ -513,32 +515,37 @@
     </div>
     <div class="rooms-grid">
       {% for item in private_groups_data %}
-        <a href="{% url 'chat:room' item.room.slug %}" class="room-card private-group">
-          <div class="room-top">
-            <div class="room-icon-wrap icon-purple">🔒</div>
-            <div class="room-tags">
-              <span class="room-tag tag-private">Private</span>
-              {% if item.unread > 0 %}
-                <span class="unread-badge">{{ item.unread }}</span>
-              {% endif %}
-            </div>
-          </div>
-          <div>
-            <p class="room-name">🔒 {{ item.room.name }}</p>
-            <p class="room-desc">{{ item.room.description|default:"Private group chat" }}</p>
-          </div>
-          <div class="room-footer">
-            <div class="room-members">
-              <div class="member-dots">
-                {% for member in item.room.members.all|slice:":3" %}
-                  <div class="member-dot md{{ forloop.counter }}">{{ member.username|first|upper }}</div>
-                {% endfor %}
+        <div style="position:relative;">
+          <a href="{% url 'chat:room' item.room.slug %}" class="room-card private-group">
+            <div class="room-top">
+              <div class="room-icon-wrap icon-purple">🔒</div>
+              <div class="room-tags">
+                <span class="room-tag tag-private">Private</span>
+                {% if item.unread > 0 %}
+                  <span class="unread-badge">{{ item.unread }}</span>
+                {% endif %}
               </div>
-              {{ item.room.members.count }} member{% if item.room.members.count != 1 %}s{% endif %}
             </div>
-            <span class="room-arrow">→</span>
-          </div>
-        </a>
+            <div>
+              <p class="room-name">🔒 {{ item.room.name }}</p>
+              <p class="room-desc">{{ item.room.description|default:"Private group chat" }}</p>
+            </div>
+            <div class="room-footer">
+              <div class="room-members">
+                <div class="member-dots">
+                  {% for member in item.room.members.all|slice:":3" %}
+                    <div class="member-dot md{{ forloop.counter }}">{{ member.username|first|upper }}</div>
+                  {% endfor %}
+                </div>
+                {{ item.room.members.count }} member{% if item.room.members.count != 1 %}s{% endif %}
+              </div>
+              <span class="room-arrow">→</span>
+            </div>
+          </a>
+          {% if item.room.admin == request.user %}
+            <a href="{% url 'chat:room_settings' item.room.slug %}" class="room-settings-btn" title="Room Settings">⚙️</a>
+          {% endif %}
+        </div>
       {% endfor %}
     </div>
     {% endif %}

@@ -275,6 +275,7 @@
         {% endif %}
         {% if room.is_private and not room.slug|slice:":3" == "dm-" and is_admin %}
           <button id="inviteBtn" class="icon-btn" title="Invite user" onclick="openInviteModal()">✉️</button>
+        <a href="{% url 'chat:room_settings' room.slug %}" class="icon-btn" title="Room Settings" style="text-decoration:none;">⚙️</a>
         {% endif %}
       </div>
     </div>
