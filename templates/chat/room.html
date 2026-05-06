@@ -214,10 +214,18 @@
           <div class="room-avatar">
             {% if r.avatar %}
               <img src="{{ r.avatar.url }}" alt="{{ r.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
-            {% elif r.is_private %}
-              🔒
             {% else %}
-              #
+            {% if r.slug|slice:":3" == "dm-" %}
+      {# DM → show other user's first letter #}
+      {% for member in r.members.all %}
+        {% if member != request.user %}
+          {{ member.username|first|upper }}
+        {% endif %}
+      {% endfor %}
+    {% else %}
+      {# Private Group → show group name first letter #}
+      {{ r.name|first|upper }}
+    {% endif %}
             {% endif %}
           </div>
           <div class="room-meta">
@@ -249,7 +257,17 @@
             {% if r.avatar %}
               <img src="{{ r.avatar.url }}" alt="{{ r.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
             {% else %}
-              🔒
+              {% if r.slug|slice:":3" == "dm-" %}
+      {# DM → show other user's first letter #}
+      {% for member in r.members.all %}
+        {% if member != request.user %}
+          {{ member.username|first|upper }}
+        {% endif %}
+      {% endfor %}
+    {% else %}
+      {# Private Group → show group name first letter #}
+      {{ r.name|first|upper }}
+    {% endif %}
             {% endif %}
           </div>
           <div class="room-meta">
@@ -277,7 +295,7 @@
       {% for r in public_rooms %}
         <a href="{% url 'chat:room' r.slug %}"
            class="room-item {% if r.slug == room.slug %}active{% endif %}" data-room-name="{{ r.name }}">
-          <div class="room-avatar">#</div>
+          <div class="room-avatar">{{ r.name|first|upper }}</div>
           <div class="room-meta">
             <div class="room-name">{{ r.name }}</div>
             <div class="room-preview">

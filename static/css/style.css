@@ -319,7 +319,7 @@ body {
 .room-avatar {
   width: 46px; height: 46px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary), #1a5f8a);
+  background: var(--avatar-bg, linear-gradient(135deg, var(--primary), #1a5f8a));
   display: flex; align-items: center; justify-content: center;
   font-size: 20px;
   flex-shrink: 0;
@@ -327,6 +327,11 @@ body {
   color: #fff;
   font-size: 18px;
 }
+.room-item:nth-child(5n+1) .room-avatar { --avatar-bg: #f44336; }
+.room-item:nth-child(5n+2) .room-avatar { --avatar-bg: #2196f3; }
+.room-item:nth-child(5n+3) .room-avatar { --avatar-bg: #4caf50; }
+.room-item:nth-child(5n+4) .room-avatar { --avatar-bg: #ff9800; }
+.room-item:nth-child(5n+5) .room-avatar { --avatar-bg: #9c27b0; }
 .room-meta { flex: 1; overflow: hidden; }
 .room-name { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
 .room-preview { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
