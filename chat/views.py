@@ -176,7 +176,12 @@ def room(request, room_slug):
 ).annotate(
     last_message_content=Subquery(last_message.values('content')[:1]),
     last_message_time=Subquery(last_message.values('timestamp')[:1]),
-)
+    )
+
+    # Recent rooms: all rooms user has access to, sorted by last message time
+    recent_rooms = list(my_private_rooms.exclude(slug__startswith='dm-')) + list(public_rooms)
+    recent_rooms.sort(key=lambda r: r.last_message_time or r.created_at, reverse=True)
+    recent_rooms = recent_rooms[:5]
 
     # Pending requests for this room (only admin can see)
     pending_requests = []
@@ -199,6 +204,7 @@ def room(request, room_slug):
         'messages': messages_qs,
         'public_rooms': public_rooms,
         'my_private_rooms': my_private_rooms,
+        'recent_rooms': recent_rooms,
         'pending_requests': pending_requests,
         'inviteable_users': inviteable_users,
         'is_admin': is_admin,

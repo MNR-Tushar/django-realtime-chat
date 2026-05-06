@@ -717,7 +717,7 @@
     </div>
     {% endif %}
 
-    {% with rooms.first as featured %}
+    {% comment %} {% with rooms.first as featured %}
     {% if featured %}
     <div class="section-header">
       <div class="section-title">Featured Room</div>
@@ -740,7 +740,7 @@
       </div>
     </a>
     {% endif %}
-    {% endwith %}
+    {% endwith %} {% endcomment %}
 
     {# ── All Public Rooms Slideshow ── #}
     <div class="section-header" style="margin-top:32px;">
