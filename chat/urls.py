@@ -12,6 +12,7 @@ urlpatterns = [
     # ── Room Settings ──────────────────────────────────────────────
     path('room/<slug:room_slug>/settings/', views.room_settings, name='room_settings'),
     path('room/<slug:room_slug>/remove-member/', views.remove_member, name='remove_member'),
+    path('room/<slug:room_slug>/leave/', views.leave_group, name='leave_group'),
 
     # ── Message Pagination ──────────────────────────────────────────
     path('room/<slug:room_slug>/older-messages/', views.load_older_messages, name='load_older_messages'),
@@ -27,4 +28,7 @@ urlpatterns = [
     path('room/<slug:room_slug>/invite/', views.invite_to_room, name='invite_to_room'),
     path('invitation/<int:invitation_id>/<str:action>/', views.handle_invitation, name='handle_invitation'),
     path('my-invitations/', views.my_invitations, name='my_invitations'),
+    
+    # ── User Profile URLs ───────────────────────────────────────────
+    path('user/<str:username>/profile/', views.user_profile, name='user_profile'),
 ]

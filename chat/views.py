@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, Http404
 from django.utils import timezone
@@ -118,6 +119,9 @@ def index(request):
     # All users for slideshow (exclude current user)
     all_users = User.objects.exclude(id=request.user.id)
 
+    # Online users list for display
+    online_users = User.objects.filter(is_online=True).exclude(id=request.user.id).order_by('username')
+
     # ── Pending invitations for this user ──
     my_pending_invitations = Invitation.objects.filter(
         invited_user=request.user,
@@ -134,6 +138,7 @@ def index(request):
         'dm_list': dm_list,
         'other_users': other_users,
         'all_users': all_users,
+        'online_users': online_users,
         'online_count': online_count,
         'messages_today': messages_today,
         'total_users': User.objects.count(),
@@ -523,6 +528,76 @@ def remove_member(request, room_slug):
 
     room.members.remove(member)
     return JsonResponse({'ok': True, 'message': f'{username} has been removed from the room'})
+
+
+@login_required
+def leave_group(request, room_slug):
+    """Member leaves a private group."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    room = get_object_or_404(Room, slug=room_slug, is_private=True)
+
+    # Cannot leave DM rooms
+    if room.slug.startswith('dm-'):
+        return JsonResponse({'error': 'Cannot leave a direct message room'}, status=400)
+
+    # Must be a member to leave
+    if not room.members.filter(id=request.user.id).exists():
+        return JsonResponse({'error': 'You are not a member of this room'}, status=403)
+
+    # Admin cannot leave (must transfer adminship first or delete room)
+    if room.admin == request.user:
+        return JsonResponse({'error': 'Room admin cannot leave. Transfer adminship or delete room.'}, status=400)
+
+    # Remove user from room
+    room.members.remove(request.user)
+    
+    return JsonResponse({
+        'ok': True, 
+        'message': f'You have left "{room.name}"',
+        'redirect_url': reverse('chat:index')
+    })
+
+
+@login_required
+def user_profile(request, username):
+    """API endpoint to get user's profile and group memberships."""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET only'}, status=405)
+    
+    User = get_user_model()
+    user = get_object_or_404(User, username=username)
+    
+    # Get all private groups the user is a member of (excluding DM rooms)
+    user_groups = Room.objects.filter(
+        members=user,
+        is_private=True
+    ).exclude(
+        slug__startswith='dm-'
+    ).select_related('admin').order_by('name')
+    
+    # Check if current user is also a member of these groups
+    groups_data = []
+    for group in user_groups:
+        is_member = group.members.filter(id=request.user.id).exists()
+        groups_data.append({
+            'name': group.name,
+            'slug': group.slug,
+            'description': group.description or '',
+            'is_admin': group.admin == user,
+            'member_count': group.members.count(),
+            'current_user_is_member': is_member,
+            'avatar_url': group.avatar.url if group.avatar else None,
+        })
+    
+    return JsonResponse({
+        'username': user.username,
+        'is_online': user.is_online,
+        'last_seen': user.get_last_seen_text() if hasattr(user, 'get_last_seen_text') else '',
+        'avatar_url': user.avatar.url if user.avatar else None,
+        'groups': groups_data,
+    })
 
 
 @login_required
