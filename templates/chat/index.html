@@ -788,14 +788,24 @@
       <button class="rooms-slide-btn rooms-slide-next" onclick="moveRoomsSlide(1)">›</button>
     </div>
 
+    {# ── Create Room Options (Always Visible) ── #}
+    <div class="section-header" style="margin-top:32px;">
+      <div class="section-title">Create Room</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="create-room-btn" onclick="openCreatePublicRoomModal()" style="background:rgba(44,165,224,0.08);border-color:rgba(44,165,224,0.5);color:#2ca5e0;">
+          🌐 Public Room
+        </button>
+        <button class="create-room-btn" onclick="openCreatePrivateRoomModal()">
+          🔒 Private Room
+        </button>
+      </div>
+    </div>
+
     {# ── My Private Groups (member) ── #}
     {% if private_groups_data %}
-    <div class="section-header" style="margin-top:32px;">
+    <div class="section-header" style="margin-top:24px;">
       <div class="section-title">My Private Groups</div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:12px;color:var(--muted);">Only you and members can see these</span>
-        <button class="create-room-btn" onclick="openCreateRoomModal()">+ Create Room</button>
-      </div>
+      <span style="font-size:12px;color:var(--muted);">Only you and members can see these</span>
     </div>
     <div class="rooms-grid" id="privateGroupsGrid">
       {% for item in private_groups_data %}
@@ -949,25 +959,49 @@
   </div>
 </div>
 
-{# ── Create Room Modal ── #}
-<div id="createRoomModal" class="modal-overlay" style="display:none;" onclick="closeCreateRoomModal(event)">
+{# ── Create Private Room Modal ── #}
+<div id="createPrivateRoomModal" class="modal-overlay" style="display:none;" onclick="closeCreatePrivateRoomModal(event)">
   <div class="modal-box" onclick="event.stopPropagation()">
     <div class="modal-icon">🔒</div>
     <h3 class="modal-title">Create Private Room</h3>
     <p class="modal-body">Create a private group where only invited members can chat.</p>
-    <form id="createRoomForm" onsubmit="submitCreateRoom(event)">
+    <form id="createPrivateRoomForm" onsubmit="submitCreatePrivateRoom(event)">
       {% csrf_token %}
       <div class="modal-form-group">
-        <label for="roomName">Room Name</label>
-        <input type="text" id="roomName" name="name" placeholder="e.g. Project Alpha" maxlength="100" required minlength="3">
+        <label for="privateRoomName">Room Name</label>
+        <input type="text" id="privateRoomName" name="name" placeholder="e.g. Project Alpha" maxlength="100" required minlength="3">
       </div>
       <div class="modal-form-group">
-        <label for="roomDesc">Description (optional)</label>
-        <textarea id="roomDesc" name="description" placeholder="What is this room about?"></textarea>
+        <label for="privateRoomDesc">Description (optional)</label>
+        <textarea id="privateRoomDesc" name="description" placeholder="What is this room about?"></textarea>
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn" onclick="closeCreateRoomModal()">Cancel</button>
-        <button type="submit" class="btn btn-primary" id="createRoomSubmitBtn">Create Room</button>
+        <button type="button" class="btn" onclick="closeCreatePrivateRoomModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="createPrivateRoomSubmitBtn">Create Room</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Create Public Room Modal ── #}
+<div id="createPublicRoomModal" class="modal-overlay" style="display:none;" onclick="closeCreatePublicRoomModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-icon">🌐</div>
+    <h3 class="modal-title">Create Public Room</h3>
+    <p class="modal-body">Create a public room anyone can join and chat.</p>
+    <form id="createPublicRoomForm" onsubmit="submitCreatePublicRoom(event)">
+      {% csrf_token %}
+      <div class="modal-form-group">
+        <label for="publicRoomName">Room Name</label>
+        <input type="text" id="publicRoomName" name="name" placeholder="e.g. General Chat" maxlength="100" required minlength="3">
+      </div>
+      <div class="modal-form-group">
+        <label for="publicRoomDesc">Description (optional)</label>
+        <textarea id="publicRoomDesc" name="description" placeholder="What is this room about?"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeCreatePublicRoomModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="createPublicRoomSubmitBtn">Create Room</button>
       </div>
     </form>
   </div>
@@ -1214,27 +1248,27 @@ async function handleJoinRequest(requestId, action) {
   }
 }
 
-// ── Create Room Modal ──────────────────────────────────────────────
-function openCreateRoomModal() {
-  document.getElementById('createRoomModal').style.display = 'flex';
-  document.getElementById('roomName').focus();
+// ── Create Private Room Modal ──────────────────────────────────────
+function openCreatePrivateRoomModal() {
+  document.getElementById('createPrivateRoomModal').style.display = 'flex';
+  document.getElementById('privateRoomName').focus();
 }
 
-function closeCreateRoomModal(e) {
+function closeCreatePrivateRoomModal(e) {
   if (e && e.target !== e.currentTarget) return;
-  document.getElementById('createRoomModal').style.display = 'none';
-  document.getElementById('createRoomForm').reset();
+  document.getElementById('createPrivateRoomModal').style.display = 'none';
+  document.getElementById('createPrivateRoomForm').reset();
 }
 
-async function submitCreateRoom(e) {
+async function submitCreatePrivateRoom(e) {
   e.preventDefault();
-  const btn = document.getElementById('createRoomSubmitBtn');
+  const btn = document.getElementById('createPrivateRoomSubmitBtn');
   const origText = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Creating...';
 
   try {
-    const form = document.getElementById('createRoomForm');
+    const form = document.getElementById('createPrivateRoomForm');
     const formData = new FormData(form);
 
     const res = await fetch('/create-room/', {
@@ -1244,7 +1278,54 @@ async function submitCreateRoom(e) {
     });
     const data = await res.json();
     if (data.ok) {
-      closeCreateRoomModal();
+      closeCreatePrivateRoomModal();
+      showToast('Room Created!', data.message, 'success');
+      setTimeout(() => {
+        window.location.href = `/room/${data.room_slug}/`;
+      }, 800);
+    } else {
+      btn.disabled = false;
+      btn.textContent = origText;
+      showToast('Error', data.error || 'Something went wrong.', 'error');
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = origText;
+    showToast('Error', 'Network error. Please try again.', 'error');
+  }
+}
+
+// ── Create Public Room Modal ──────────────────────────────────────
+function openCreatePublicRoomModal() {
+  document.getElementById('createPublicRoomModal').style.display = 'flex';
+  document.getElementById('publicRoomName').focus();
+}
+
+function closeCreatePublicRoomModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('createPublicRoomModal').style.display = 'none';
+  document.getElementById('createPublicRoomForm').reset();
+}
+
+async function submitCreatePublicRoom(e) {
+  e.preventDefault();
+  const btn = document.getElementById('createPublicRoomSubmitBtn');
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+
+  try {
+    const form = document.getElementById('createPublicRoomForm');
+    const formData = new FormData(form);
+
+    const res = await fetch('/create-public-room/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN },
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.ok) {
+      closeCreatePublicRoomModal();
       showToast('Room Created!', data.message, 'success');
       setTimeout(() => {
         window.location.href = `/room/${data.room_slug}/`;

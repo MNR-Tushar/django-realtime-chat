@@ -25,6 +25,7 @@ urlpatterns = [
 
     # ── Private Room & Invitation URLs ──────────────────────────────
     path('create-room/', views.create_private_room, name='create_private_room'),
+    path('create-public-room/', views.create_public_room, name='create_public_room'),
     path('room/<slug:room_slug>/invite/', views.invite_to_room, name='invite_to_room'),
     path('invitation/<int:invitation_id>/<str:action>/', views.handle_invitation, name='handle_invitation'),
     path('my-invitations/', views.my_invitations, name='my_invitations'),

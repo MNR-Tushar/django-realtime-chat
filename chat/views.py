@@ -13,18 +13,29 @@ from datetime import timedelta
 def index(request):
     User = get_user_model()
 
-    # public rooms — is_private=False
-    public_rooms = Room.objects.filter(is_private=False)
+    # prefetch members for all room queries to avoid N+1
+    from django.db.models import Count, Q
+
+    # public rooms — is_private=False (optimized with annotations)
+    public_rooms = Room.objects.filter(is_private=False).prefetch_related('members').annotate(
+        unread_count=Count('messages', filter=Q(messages__is_read=False) & ~Q(messages__author=request.user)),
+        online_members=Count('members', filter=Q(members__is_online=True))
+    )
 
     my_private_groups = Room.objects.filter(
         is_private=True,
         members=request.user
-    ).exclude(slug__startswith='dm-')
+    ).exclude(slug__startswith='dm-').prefetch_related('members').annotate(
+        unread_count=Count('messages', filter=Q(messages__is_read=False) & ~Q(messages__author=request.user)),
+        online_members=Count('members', filter=Q(members__is_online=True))
+    )
 
     my_dm_rooms = Room.objects.filter(
         is_private=True,
         members=request.user,
         slug__startswith='dm-'
+    ).prefetch_related('members').annotate(
+        unread_count=Count('messages', filter=Q(messages__is_read=False) & ~Q(messages__author=request.user))
     )
 
     # All private groups that user is NOT a member of (excludes DM rooms)
@@ -34,17 +45,12 @@ def index(request):
         slug__startswith='dm-'
     ).exclude(
         members=request.user
+    ).prefetch_related('members').annotate(
+        online_members=Count('members', filter=Q(members__is_online=True))
     )
 
     online_count = User.objects.filter(is_online=True).count()
     messages_today = Message.objects.filter(timestamp__date=timezone.now().date()).count()
-
-    # ── Unread counts helper ───────────────────
-    def unread_for(room):
-        return Message.objects.filter(
-            room=room,
-            is_read=False,
-        ).exclude(author=request.user).count()
 
     # ── DM list with unread ────────────────────
     dm_list = []
@@ -54,29 +60,25 @@ def index(request):
             dm_list.append({
                 'room': dm_room,
                 'other_user': other,
-                'unread': unread_for(dm_room),
+                'unread': dm_room.unread_count,
             })
 
     # ── Public rooms with unread and online count ───────────────
     public_rooms_data = []
     for room in public_rooms:
-        # Count online members in this room
-        online_members = room.members.filter(is_online=True).count()
         public_rooms_data.append({
             'room': room,
-            'unread': unread_for(room),
-            'online_members': online_members,
+            'unread': room.unread_count,
+            'online_members': room.online_members,
         })
 
     # ── Private groups (member) with unread and online count ───────────────
     private_groups_data = []
     for room in my_private_groups:
-        # Count online members in this room
-        online_members = room.members.filter(is_online=True).count()
         private_groups_data.append({
             'room': room,
-            'unread': unread_for(room),
-            'online_members': online_members,
+            'unread': room.unread_count,
+            'online_members': room.online_members,
         })
 
     # ── Discoverable private groups (non-member) ───────────
@@ -95,13 +97,12 @@ def index(request):
         ).values_list('room_id', flat=True)
     )
     for room in all_private_groups:
-        # Count online members in this room
-        online_members = room.members.filter(is_online=True).count()
+        # Use pre-annotated online_members
         discoverable_groups_data.append({
             'room': room,
             'has_pending': room.id in user_pending_requests,
             'was_rejected': room.id in user_rejected_requests,
-            'online_members': online_members,
+            'online_members': room.online_members,
         })
 
     # ── Pending join requests FOR rooms where user is admin (admin view) ──
@@ -390,6 +391,56 @@ def create_private_room(request):
         'room_slug': room.slug,
         'room_name': room.name,
         'message': f'Private room "{room.name}" created!',
+    })
+
+
+@login_required
+def create_public_room(request):
+    """Create a new public room."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    name = request.POST.get('name', '').strip()
+    description = request.POST.get('description', '').strip()
+
+    if not name:
+        return JsonResponse({'error': 'Room name is required'}, status=400)
+
+    if len(name) < 3:
+        return JsonResponse({'error': 'Room name must be at least 3 characters'}, status=400)
+
+    slug = slugify(name)
+    if not slug:
+        return JsonResponse({'error': 'Invalid room name'}, status=400)
+
+    # Ensure unique slug
+    base_slug = slug
+    counter = 1
+    while Room.objects.filter(slug=slug).exists():
+        slug = f'{base_slug}-{counter}'
+        counter += 1
+
+    # Ensure unique name
+    base_name = name
+    counter = 1
+    while Room.objects.filter(name=name).exists():
+        name = f'{base_name} ({counter})'
+        counter += 1
+
+    room = Room.objects.create(
+        name=name,
+        slug=slug,
+        description=description,
+        is_private=False,
+        admin=request.user,
+    )
+    room.members.add(request.user)
+
+    return JsonResponse({
+        'ok': True,
+        'room_slug': room.slug,
+        'room_name': room.name,
+        'message': f'Public room "{room.name}" created!',
     })
 
 

@@ -8,16 +8,34 @@ class RoomAdmin(admin.ModelAdmin):
     list_filter = ['is_private']
     prepopulated_fields = {'slug': ('name',)}
     search_fields = ['name']
+    raw_id_fields = ['admin', 'members']
 
     def get_queryset(self, request):
-      
-        return super().get_queryset(request)
+        return super().get_queryset(request).select_related('admin')
 
     def save_model(self, request, obj, form, change):
-       
+
         if obj.slug.startswith('dm-'):
             obj.is_private = True
         super().save_model(request, obj, form, change)
+
+    def delete_model(self, _request, obj):
+        # Delete related objects manually to avoid FK issues
+        obj.messages.all().delete()
+        obj.join_requests.all().delete()
+        obj.invitations.all().delete()
+
+        # Disable FK checks for this deletion (SQLite workaround)
+        from django.db import connection
+        cursor = connection.cursor()
+        cursor.execute('PRAGMA foreign_keys = OFF')
+        obj.delete()
+        cursor.execute('PRAGMA foreign_keys = ON')
+
+    def delete_queryset(self, request, queryset):
+        # Bulk delete with manual cleanup
+        for obj in queryset:
+            self.delete_model(request, obj)
 
 
 @admin.register(Message)
