@@ -675,8 +675,8 @@ function closeReactionPicker() {
 
 function toggleReaction(messageId, emoji) {
   // Send via WebSocket for real-time update
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({
       type: 'emoji_reaction',
       message_id: messageId,
       emoji: emoji,
