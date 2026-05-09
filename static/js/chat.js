@@ -44,7 +44,7 @@ let soundEnabled  = true;
 let emojiPickerOpen = false;
 let reactionPickerTarget = null;
 let currentReactionPicker = null;
-const messageReactions = {};
+const messageReactions = typeof INITIAL_REACTIONS !== 'undefined' ? INITIAL_REACTIONS : {};
 
 // Edit state
 let editingMessageId = null;
@@ -674,13 +674,37 @@ function closeReactionPicker() {
 }
 
 function toggleReaction(messageId, emoji) {
-  if (!messageReactions[messageId]) messageReactions[messageId] = {};
-  const r = messageReactions[messageId];
-  if (!r[emoji]) r[emoji] = [];
-  const idx = r[emoji].indexOf(CURRENT_USER);
-  if (idx === -1) r[emoji].push(CURRENT_USER);
-  else { r[emoji].splice(idx, 1); if (r[emoji].length === 0) delete r[emoji]; }
-  renderReactions(messageId);
+  // Send via WebSocket for real-time update
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'emoji_reaction',
+      message_id: messageId,
+      emoji: emoji,
+    }));
+  } else {
+    // Fallback to HTTP if WebSocket not available
+    fetch(REACTION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF_TOKEN,
+      },
+      body: JSON.stringify({
+        message_id: messageId,
+        emoji: emoji,
+      }),
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.ok) {
+        messageReactions[messageId] = data.reactions;
+        renderReactions(messageId);
+      }
+    })
+    .catch(err => {
+      console.error('Failed to toggle reaction:', err);
+    });
+  }
 }
 
 function renderReactions(messageId) {
@@ -863,6 +887,11 @@ function bindSocketEvents(ws) {
     }
     else if (data.type === 'message_edited') {
       handleMessageEdited(data.message_id, data.content);
+    }
+    else if (data.type === 'emoji_reaction') {
+      // Update local state and render reactions
+      messageReactions[data.message_id] = data.reactions;
+      renderReactions(data.message_id);
     }
   };
 }

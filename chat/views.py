@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.contrib import messages
 from django.utils.text import slugify
-from .models import Room, Message, JoinRequest, Invitation
+from .models import Room, Message, JoinRequest, Invitation, EmojiReaction
 from django.db.models import OuterRef, Subquery
 from datetime import timedelta
 @login_required
@@ -205,6 +205,17 @@ def room(request, room_slug):
             member_ids = room.members.values_list('id', flat=True)
             inviteable_users = User.objects.exclude(id__in=member_ids).exclude(id=request.user.id)
 
+    # Get emoji reactions for these messages
+    message_ids = [m.id for m in messages_qs]
+    reactions_qs = EmojiReaction.objects.filter(message_id__in=message_ids).select_related('from_user', 'to_user')
+    reactions_data = {}
+    for r in reactions_qs:
+        if str(r.message_id) not in reactions_data:
+            reactions_data[str(r.message_id)] = {}
+        if r.emoji not in reactions_data[str(r.message_id)]:
+            reactions_data[str(r.message_id)][r.emoji] = []
+        reactions_data[str(r.message_id)][r.emoji].append(r.from_user.username)
+
     return render(request, 'chat/room.html', {
         'room': room,
         'messages': messages_qs,
@@ -215,6 +226,7 @@ def room(request, room_slug):
         'inviteable_users': inviteable_users,
         'is_admin': is_admin,
         'room_online_members': room_online_members,
+        'emoji_reactions': reactions_data,
     })
 
 
@@ -773,4 +785,66 @@ def load_older_messages(request, room_slug):
     return JsonResponse({
         'messages': messages_data,
         'has_more': room.messages.filter(timestamp__lt=ref_message.timestamp).count() > 50,
+    })
+
+
+@login_required
+def toggle_reaction(request, room_slug):
+    """API endpoint to toggle emoji reaction on a message."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    import json
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    message_id = data.get('message_id')
+    emoji = data.get('emoji')
+
+    if not message_id or not emoji:
+        return JsonResponse({'error': 'message_id and emoji are required'}, status=400)
+
+    room = get_object_or_404(Room, slug=room_slug)
+    if room.is_private and not room.members.filter(id=request.user.id).exists():
+        return JsonResponse({'error': 'Access denied'}, status=403)
+
+    message = get_object_or_404(Message, id=message_id, room=room)
+
+    # Get the "to_user" - the message author
+    to_user = message.author
+
+    # Check if reaction already exists
+    existing = EmojiReaction.objects.filter(
+        message=message,
+        from_user=request.user,
+        emoji=emoji
+    ).first()
+
+    if existing:
+        existing.delete()
+        action = 'removed'
+    else:
+        EmojiReaction.objects.create(
+            message=message,
+            room=room,
+            from_user=request.user,
+            to_user=to_user,
+            emoji=emoji
+        )
+        action = 'added'
+
+    # Get all reactions for this message to return
+    reactions = EmojiReaction.objects.filter(message=message)
+    reactions_data = {}
+    for r in reactions:
+        if r.emoji not in reactions_data:
+            reactions_data[r.emoji] = []
+        reactions_data[r.emoji].append(r.from_user.username)
+
+    return JsonResponse({
+        'ok': True,
+        'action': action,
+        'reactions': reactions_data,
     })

@@ -16,6 +16,7 @@ urlpatterns = [
 
     # ── Message Pagination ──────────────────────────────────────────
     path('room/<slug:room_slug>/older-messages/', views.load_older_messages, name='load_older_messages'),
+    path('room/<slug:room_slug>/reaction/', views.toggle_reaction, name='toggle_reaction'),
 
     # ── Join Request URLs ──────────────────────────────────────────
     path('room/<slug:room_slug>/join-request/', views.request_join, name='request_join'),

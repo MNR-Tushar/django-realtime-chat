@@ -189,6 +189,29 @@
   box-shadow: 0 0 0 3px var(--primary-glow);
 }
 .modal-form-group textarea { resize: vertical; min-height: 60px; }
+
+/* ── Emoji Reactions ── */
+.message-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  padding-left: 8px;
+}
+.reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.reaction-pill:hover { background: rgba(255,255,255,0.2); }
+.reaction-pill.mine { background: rgba(44,165,224,0.25); border: 1px solid var(--primary); }
+.reaction-count { font-size: 10px; color: var(--muted); }
 </style>
 {% endblock %}
 
@@ -716,6 +739,10 @@
   const UPLOAD_URL   = "{% url 'chat:upload_file' room.slug %}";
   const CSRF_TOKEN   = "{{ csrf_token }}";
   const OLDER_MESSAGES_URL = "{% url 'chat:load_older_messages' room.slug %}";
+  const REACTION_URL = "{% url 'chat:toggle_reaction' room.slug %}";
+
+  // Initialize messageReactions from server data
+  const INITIAL_REACTIONS = {{ emoji_reactions|safe }};
 </script>
 {% endblock %}
 
@@ -749,6 +776,13 @@
       activeRoom.scrollIntoView({
         behavior: "smooth",
         block: "center"
+      });
+    }
+
+    // Render initial reactions from server
+    if (typeof messageReactions === 'object') {
+      Object.keys(messageReactions).forEach(function(msgId) {
+        renderReactions(msgId);
       });
     }
   });

@@ -135,6 +135,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 )
             return
 
+        # ── Emoji reaction ────────────────────────────────
+        if event_type == 'emoji_reaction':
+            message_id = data.get('message_id')
+            emoji = data.get('emoji')
+            reactions = await self.toggle_reaction(message_id, emoji)
+            if reactions is not None:
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type':       'emoji_reaction',
+                        'message_id': message_id,
+                        'reactions':  reactions,
+                    }
+                )
+            return
+
         # Regular text message (with optional reply)
         message_content = data.get('message', '').strip()
         if not message_content:
@@ -214,6 +230,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'type':       'message_edited',
             'message_id': event['message_id'],
             'content':    event['content'],
+        }))
+
+    async def emoji_reaction(self, event):
+        await self.send(text_data=json.dumps({
+            'type':       'emoji_reaction',
+            'message_id': event['message_id'],
+            'reactions':  event['reactions'],
         }))
 
     # ── DB Helpers ────────────────────────────
@@ -316,3 +339,42 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return True
         except Message.DoesNotExist:
             return False
+
+    @database_sync_to_async
+    def toggle_reaction(self, message_id, emoji):
+        """Toggle emoji reaction and return updated reactions data"""
+        from .models import EmojiReaction
+        try:
+            room = Room.objects.get(slug=self.room_slug)
+            message = Message.objects.get(id=message_id, room=room)
+            to_user = message.author
+            
+            # Check if reaction already exists
+            existing = EmojiReaction.objects.filter(
+                message=message,
+                from_user=self.user,
+                emoji=emoji
+            ).first()
+            
+            if existing:
+                existing.delete()
+            else:
+                EmojiReaction.objects.create(
+                    message=message,
+                    room=room,
+                    from_user=self.user,
+                    to_user=to_user,
+                    emoji=emoji
+                )
+            
+            # Get all reactions for this message
+            reactions = EmojiReaction.objects.filter(message=message)
+            reactions_data = {}
+            for r in reactions:
+                if r.emoji not in reactions_data:
+                    reactions_data[r.emoji] = []
+                reactions_data[r.emoji].append(r.from_user.username)
+            
+            return reactions_data
+        except (Room.DoesNotExist, Message.DoesNotExist):
+            return None

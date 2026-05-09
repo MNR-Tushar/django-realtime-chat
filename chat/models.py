@@ -156,3 +156,37 @@ class Invitation(models.Model):
 
     def __str__(self):
         return f'{self.invited_by.username} invited {self.invited_user.username} → {self.room.name} [{self.status}]'
+
+
+class EmojiReaction(models.Model):
+    """Emoji reaction on a message"""
+    message = models.ForeignKey(
+        Message,
+        on_delete=models.CASCADE,
+        related_name='emoji_reactions'
+    )
+    room = models.ForeignKey(
+        Room,
+        on_delete=models.CASCADE,
+        related_name='emoji_reactions'
+    )
+    from_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='sent_reactions'
+    )
+    to_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='received_reactions'
+    )
+    emoji = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('message', 'from_user', 'emoji')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.from_user.username} reacted {self.emoji} to {self.to_user.username}'

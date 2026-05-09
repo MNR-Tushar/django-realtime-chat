@@ -62,3 +62,14 @@ class InvitationAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('invited_by', 'invited_user', 'room')
+
+
+@admin.register(EmojiReaction)
+class EmojiReactionAdmin(admin.ModelAdmin):
+    list_display = ['from_user', 'to_user', 'room', 'message', 'emoji', 'created_at', 'updated_at']
+    list_filter = ['emoji', 'created_at']
+    search_fields = ['from_user__username', 'to_user__username', 'message__content', 'room__name']
+    raw_id_fields = ['from_user', 'to_user', 'message', 'room']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('from_user', 'to_user', 'message', 'room')
