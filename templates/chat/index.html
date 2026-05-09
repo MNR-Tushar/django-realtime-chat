@@ -614,6 +614,44 @@
 }
 .dm-slide-prev { left: -10px; }
 .dm-slide-next { right: -10px; }
+
+/* ── Room Search ── */
+.room-search-container {
+  margin-bottom: 20px;
+}
+.room-search-input {
+  width: 100%;
+  padding: 12px 16px 12px 44px;
+  border-radius: 14px;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%237b9ab0' viewBox='0 0 24 24'%3E%3Cpath d='M21.71 20.29l-5.01-5.01C17.54 13.68 18 11.91 18 10c0-4.41-3.59-8-8-8S2 5.59 2 10s3.59 8 8 8c1.91 0 3.68-.46 5.28-1.29l5.01 5.01c.39.39 1.02.39 1.42 0 .39-.39.39-1.02 0-1.42zM10 16c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 14px center;
+  background-size: 20px;
+}
+.room-search-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+.room-search-input::placeholder {
+  color: var(--muted);
+}
+.no-results-message {
+  grid-column: 1/-1;
+  padding: 32px;
+  text-align: center;
+  color: var(--muted);
+}
+.no-results-message h3 {
+  color: var(--text);
+  margin-bottom: 8px;
+}
 </style>
 {% endblock %}
 
@@ -621,12 +659,14 @@
 <div style="padding-top:54px; min-height:100vh; background:radial-gradient(ellipse at 20% 20%, rgba(44,165,224,0.06) 0%, transparent 60%), var(--bg2);">
 
   <div class="hero">
-    <div class="hero-badge">
+    {% comment %} <div class="hero-badge">
       <span class="hero-badge-dot"></span>
       {{ online_count|default:"0" }} member{% if online_count != 1 %}s{% endif %} online
-    </div>
+    </div> {% endcomment %}
     <h1>Welcome to <span>NexaChat</span></h1>
-    <p>Choose a room and start chatting in real-time with your team.</p>
+<p style="white-space: nowrap;">
+  Choose a room and start chatting in real-time with your team.
+</p>
     <div class="hero-stats">
       <div class="stat">
         <div class="stat-num">{{ rooms.count }}</div>
@@ -741,6 +781,10 @@
     </a>
     {% endif %}
     {% endwith %} {% endcomment %}
+
+     <div class="room-search-container">
+      <input type="text" class="room-search-input" id="roomSearchInput" placeholder="Search rooms by name..." oninput="filterRooms(this.value)">
+    </div>
 
     {# ── All Public Rooms Slideshow ── #}
     <div class="section-header" style="margin-top:32px;">
@@ -1393,6 +1437,126 @@ async function handleInvitation(invitationId, action) {
   } catch (e) {
     if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
     showToast('Error', 'Network error.', 'error');
+  }
+}
+
+// ── Room Search Filter ───────────────────────────────────────────────
+function filterRooms(query) {
+  query = query.toLowerCase().trim();
+
+  // Filter room slides in the slideshow
+  const roomSlides = document.querySelectorAll('.room-slide');
+  let visibleSlides = 0;
+  roomSlides.forEach(slide => {
+    const roomName = slide.querySelector('.room-slide-name')?.textContent?.toLowerCase() || '';
+    const roomDesc = slide.querySelector('.room-slide-desc')?.textContent?.toLowerCase() || '';
+    const matches = query === '' || roomName.includes(query) || roomDesc.includes(query);
+    slide.style.display = matches ? '' : 'none';
+    if (matches) visibleSlides++;
+  });
+
+  // Show/hide slideshow navigation buttons based on visible slides
+  const slideshowContainer = document.querySelector('.rooms-slideshow-container');
+  if (slideshowContainer) {
+    const prevBtn = slideshowContainer.querySelector('.rooms-slide-prev');
+    const nextBtn = slideshowContainer.querySelector('.rooms-slide-next');
+    if (prevBtn) prevBtn.style.display = visibleSlides > 0 ? 'flex' : 'none';
+    if (nextBtn) nextBtn.style.display = visibleSlides > 0 ? 'flex' : 'none';
+  }
+
+  // Update slideshow container visibility
+  const slideshow = document.getElementById('roomsSlideshow');
+  if (slideshow) {
+    const hasVisibleChildren = Array.from(slideshow.children).some(c => c.style.display !== 'none');
+    slideshow.style.display = hasVisibleChildren ? '' : 'none';
+  }
+
+  // Filter private groups
+  const privateGroupCards = document.querySelectorAll('#privateGroupsGrid .room-card, #privateGroupsGrid > div');
+  let visiblePrivateGroups = 0;
+  privateGroupCards.forEach(card => {
+    const roomName = card.querySelector('.room-name')?.textContent?.toLowerCase() || '';
+    const roomDesc = card.querySelector('.room-desc')?.textContent?.toLowerCase() || '';
+    const matches = query === '' || roomName.includes(query) || roomDesc.includes(query);
+    card.style.display = matches ? '' : 'none';
+    if (matches) visiblePrivateGroups++;
+  });
+
+  // Show "no results" message for private groups
+  let privateNoResults = document.getElementById('privateNoResults');
+  if (visiblePrivateGroups === 0 && query !== '') {
+    if (!privateNoResults) {
+      privateNoResults = document.createElement('div');
+      privateNoResults.id = 'privateNoResults';
+      privateNoResults.className = 'no-results-message';
+      privateNoResults.innerHTML = '<h3>No matching rooms</h3><p>Try a different search term</p>';
+      const grid = document.getElementById('privateGroupsGrid');
+      if (grid) grid.parentNode.insertBefore(privateNoResults, grid.nextSibling);
+    }
+    privateNoResults.style.display = '';
+  } else if (privateNoResults) {
+    privateNoResults.style.display = 'none';
+  }
+
+  // Filter discoverable groups
+  const discoverableCards = document.querySelectorAll('#discoverableGrid .room-card');
+  let visibleDiscoverable = 0;
+  discoverableCards.forEach(card => {
+    const roomName = card.querySelector('.room-name')?.textContent?.toLowerCase() || '';
+    const roomDesc = card.querySelector('.room-desc')?.textContent?.toLowerCase() || '';
+    const matches = query === '' || roomName.includes(query) || roomDesc.includes(query);
+    card.style.display = matches ? '' : 'none';
+    if (matches) visibleDiscoverable++;
+  });
+
+  // Show "no results" message for discoverable groups
+  let discoverableNoResults = document.getElementById('discoverableNoResults');
+  if (visibleDiscoverable === 0 && query !== '') {
+    if (!discoverableNoResults) {
+      discoverableNoResults = document.createElement('div');
+      discoverableNoResults.id = 'discoverableNoResults';
+      discoverableNoResults.className = 'no-results-message';
+      discoverableNoResults.innerHTML = '<h3>No matching rooms</h3><p>Try a different search term</p>';
+      const grid = document.getElementById('discoverableGrid');
+      if (grid) grid.parentNode.insertBefore(discoverableNoResults, grid.nextSibling);
+    }
+    discoverableNoResults.style.display = '';
+  } else if (discoverableNoResults) {
+    discoverableNoResults.style.display = 'none';
+  }
+
+  // Filter DM slides
+  const dmSlides = document.querySelectorAll('.dm-slide');
+  let visibleDMs = 0;
+  dmSlides.forEach(slide => {
+    const userName = slide.querySelector('.dm-slide-name')?.textContent?.toLowerCase() || '';
+    const matches = query === '' || userName.includes(query);
+    slide.style.display = matches ? '' : 'none';
+    if (matches) visibleDMs++;
+  });
+
+  // Show/hide DM slideshow navigation buttons
+  const dmContainer = document.querySelector('.dm-slideshow-container');
+  if (dmContainer) {
+    const prevBtn = dmContainer.querySelector('.dm-slide-prev');
+    const nextBtn = dmContainer.querySelector('.dm-slide-next');
+    if (prevBtn) prevBtn.style.display = visibleDMs > 0 ? 'flex' : 'none';
+    if (nextBtn) nextBtn.style.display = visibleDMs > 0 ? 'flex' : 'none';
+  }
+
+  // Handle empty state when searching
+  const emptyState = document.querySelector('.rooms-slideshow-container .empty-state');
+  if (emptyState) {
+    emptyState.style.display = (visibleSlides === 0 && query !== '') ? 'none' : '';
+  }
+
+  // Show/hide section headers based on content
+  const allRoomsHeader = document.querySelector('.section-title');
+  if (allRoomsHeader && allRoomsHeader.textContent === 'All Rooms') {
+    const sectionHeader = allRoomsHeader.closest('.section-header');
+    if (sectionHeader) {
+      sectionHeader.style.display = (visibleSlides > 0 || query === '') ? 'flex' : 'none';
+    }
   }
 }
 </script>
