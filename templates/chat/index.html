@@ -786,9 +786,27 @@
       <input type="text" class="room-search-input" id="roomSearchInput" placeholder="Search rooms by name..." oninput="filterRooms(this.value)">
     </div>
 
+    {# ── Create Room Options (Always Visible) ── #}
+    <div class="section-header" style="margin-top:32px;display:flex;justify-content:flex-end;">
+  
+  <div style="display:flex;gap:8px;">
+    <button class="create-room-btn"
+      onclick="openCreatePublicRoomModal()"
+      style="background:rgba(44,165,224,0.08);border-color:rgba(44,165,224,0.5);color:#2ca5e0;">
+      🌐 Public Room
+    </button>
+
+    <button class="create-room-btn"
+      onclick="openCreatePrivateRoomModal()">
+      🔒 Private Room
+    </button>
+  </div>
+
+</div>
+
     {# ── All Public Rooms Slideshow ── #}
     <div class="section-header" style="margin-top:32px;">
-      <div class="section-title">All Rooms</div>
+      <div class="section-title">Public Rooms</div>
       <span style="font-size:12px;color:var(--muted);">{{ rooms.count }} room{% if rooms.count != 1 %}s{% endif %}</span>
     </div>
 
@@ -832,18 +850,7 @@
       <button class="rooms-slide-btn rooms-slide-next" onclick="moveRoomsSlide(1)">›</button>
     </div>
 
-    {# ── Create Room Options (Always Visible) ── #}
-    <div class="section-header" style="margin-top:32px;">
-      <div class="section-title">Create Room</div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button class="create-room-btn" onclick="openCreatePublicRoomModal()" style="background:rgba(44,165,224,0.08);border-color:rgba(44,165,224,0.5);color:#2ca5e0;">
-          🌐 Public Room
-        </button>
-        <button class="create-room-btn" onclick="openCreatePrivateRoomModal()">
-          🔒 Private Room
-        </button>
-      </div>
-    </div>
+    
 
     {# ── My Private Groups (member) ── #}
     {% if private_groups_data %}
@@ -972,7 +979,7 @@
     {% if request.user.is_authenticated %}
     <div class="section-header" style="margin-top:32px;">
       <div class="section-title">Direct Messages</div>
-      <span style="font-size:12px;color:var(--muted);">Only you can see these</span>
+      <span style="font-size:12px;color:var(--muted);">All Members</span>
     </div>
     {# ── User Slideshow (Auto Carousel) ── #}
     <div class="dm-slideshow-container">
