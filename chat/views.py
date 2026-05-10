@@ -6,8 +6,8 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.contrib import messages
 from django.utils.text import slugify
-from .models import Room, Message, JoinRequest, Invitation, EmojiReaction
-from django.db.models import OuterRef, Subquery
+from .models import Room, Message, JoinRequest, Invitation, EmojiReaction, RoomActivity
+from django.db.models import OuterRef, Subquery, Count
 from datetime import timedelta
 @login_required
 def index(request):
@@ -261,6 +261,15 @@ def upload_file(request, room_slug):
         file=uploaded,
         file_type='image' if uploaded.content_type.startswith('image') else 'file'
     )
+    
+    # Log activity for file upload
+    RoomActivity.objects.create(
+        room=room,
+        user=request.user,
+        activity_type='message',
+        description=f'Uploaded file: "{uploaded.name}" ({msg.file_type})'
+    )
+    
     return JsonResponse({'url': msg.file.url, 'id': msg.id, 'file_type': msg.file_type})
 
 
@@ -295,8 +304,23 @@ def request_join(request, room_slug):
         if jr.status == 'rejected':
             jr.status = 'pending'
             jr.save(update_fields=['status', 'updated_at'])
+            # Log activity
+            RoomActivity.objects.create(
+                room=room,
+                user=request.user,
+                activity_type='join_request',
+                description=f'Re-requested to join room "{room.name}"'
+            )
             return JsonResponse({'ok': True, 'status': 'pending', 'message': 'Request re-sent!'})
         return JsonResponse({'ok': True, 'status': 'pending', 'message': 'Already requested'})
+
+    # Log activity
+    RoomActivity.objects.create(
+        room=room,
+        user=request.user,
+        activity_type='join_request',
+        description=f'Requested to join room "{room.name}"'
+    )
 
     return JsonResponse({'ok': True, 'status': 'pending', 'message': 'Request sent!'})
 
@@ -332,10 +356,32 @@ def handle_join_request(request, request_id, action):
         jr.status = 'approved'
         jr.save(update_fields=['status', 'updated_at'])
         jr.room.members.add(jr.user)
+        # Log activity
+        RoomActivity.objects.create(
+            room=jr.room,
+            user=request.user,
+            activity_type='join_approve',
+            description=f'Approved join request from {jr.user.username}',
+            target_user=jr.user
+        )
+        RoomActivity.objects.create(
+            room=jr.room,
+            user=jr.user,
+            activity_type='join',
+            description=f'Joined room "{jr.room.name}"'
+        )
         return JsonResponse({'ok': True, 'action': 'approved', 'username': jr.user.username})
     elif action == 'reject':
         jr.status = 'rejected'
         jr.save(update_fields=['status', 'updated_at'])
+        # Log activity
+        RoomActivity.objects.create(
+            room=jr.room,
+            user=request.user,
+            activity_type='join_reject',
+            description=f'Rejected join request from {jr.user.username}',
+            target_user=jr.user
+        )
         return JsonResponse({'ok': True, 'action': 'rejected', 'username': jr.user.username})
     else:
         return JsonResponse({'error': 'Invalid action'}, status=400)
@@ -398,6 +444,14 @@ def create_private_room(request):
     )
     room.members.add(request.user)
 
+    # Log activity
+    RoomActivity.objects.create(
+        room=room,
+        user=request.user,
+        activity_type='room_create',
+        description=f'Created private room "{room.name}"'
+    )
+
     return JsonResponse({
         'ok': True,
         'room_slug': room.slug,
@@ -447,6 +501,14 @@ def create_public_room(request):
         admin=request.user,
     )
     room.members.add(request.user)
+
+    # Log activity
+    RoomActivity.objects.create(
+        room=room,
+        user=request.user,
+        activity_type='room_create',
+        description=f'Created public room "{room.name}"'
+    )
 
     return JsonResponse({
         'ok': True,
@@ -507,8 +569,25 @@ def invite_to_room(request, room_slug):
             inv.invited_by = request.user
             inv.status = 'pending'
             inv.save(update_fields=['invited_by', 'status', 'updated_at'])
+            # Log activity
+            RoomActivity.objects.create(
+                room=room,
+                user=request.user,
+                activity_type='invitation_sent',
+                description=f'Re-invited {username} to room "{room.name}"',
+                target_user=invited_user
+            )
             return JsonResponse({'ok': True, 'message': f'Re-invitation sent to {username}!'})
         return JsonResponse({'ok': True, 'message': f'{username} already has a pending invitation'})
+
+    # Log activity
+    RoomActivity.objects.create(
+        room=room,
+        user=request.user,
+        activity_type='invitation_sent',
+        description=f'Invited {username} to room "{room.name}"',
+        target_user=invited_user
+    )
 
     return JsonResponse({'ok': True, 'message': f'Invitation sent to {username}!'})
 
@@ -528,6 +607,19 @@ def handle_invitation(request, invitation_id, action):
         inv.status = 'accepted'
         inv.save(update_fields=['status', 'updated_at'])
         inv.room.members.add(inv.invited_user)
+        # Log activity
+        RoomActivity.objects.create(
+            room=inv.room,
+            user=inv.invited_user,
+            activity_type='invitation_accept',
+            description=f'Accepted invitation to room "{inv.room.name}"'
+        )
+        RoomActivity.objects.create(
+            room=inv.room,
+            user=inv.invited_user,
+            activity_type='join',
+            description=f'Joined room "{inv.room.name}" via invitation'
+        )
         return JsonResponse({
             'ok': True,
             'action': 'accepted',
@@ -537,6 +629,13 @@ def handle_invitation(request, invitation_id, action):
     elif action == 'decline':
         inv.status = 'declined'
         inv.save(update_fields=['status', 'updated_at'])
+        # Log activity
+        RoomActivity.objects.create(
+            room=inv.room,
+            user=inv.invited_user,
+            activity_type='invitation_decline',
+            description=f'Declined invitation to room "{inv.room.name}"'
+        )
         return JsonResponse({'ok': True, 'action': 'declined'})
     else:
         return JsonResponse({'error': 'Invalid action'}, status=400)
@@ -590,6 +689,16 @@ def remove_member(request, room_slug):
         return JsonResponse({'error': f'{username} is not a member of this room'}, status=400)
 
     room.members.remove(member)
+    
+    # Log activity
+    RoomActivity.objects.create(
+        room=room,
+        user=request.user,
+        activity_type='member_remove',
+        description=f'Removed {username} from room "{room.name}"',
+        target_user=member
+    )
+    
     return JsonResponse({'ok': True, 'message': f'{username} has been removed from the room'})
 
 
@@ -615,6 +724,14 @@ def leave_group(request, room_slug):
 
     # Remove user from room
     room.members.remove(request.user)
+    
+    # Log activity
+    RoomActivity.objects.create(
+        room=room,
+        user=request.user,
+        activity_type='leave',
+        description=f'Left room "{room.name}"'
+    )
     
     return JsonResponse({
         'ok': True, 
@@ -712,6 +829,13 @@ def room_settings(request, room_slug):
             return redirect('chat:room_settings', room_slug=room_slug)
 
         elif action == 'delete':
+            # Log activity before deletion
+            RoomActivity.objects.create(
+                room=room,
+                user=request.user,
+                activity_type='room_delete',
+                description=f'Deleted room "{room.name}"'
+            )
             room.delete()
             messages.success(request, f'Room deleted.')
             return redirect('chat:index')
@@ -847,4 +971,96 @@ def toggle_reaction(request, room_slug):
         'ok': True,
         'action': action,
         'reactions': reactions_data,
+    })
+
+
+@login_required
+def transfer_admin(request, room_slug):
+    """Transfer admin rights to another member."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    room = get_object_or_404(Room, slug=room_slug, is_private=True)
+
+    # Only current admin can transfer adminship
+    if room.admin != request.user:
+        return JsonResponse({'error': 'Only room admin can transfer adminship'}, status=403)
+
+    # DM rooms cannot have admin transfers
+    if room.slug.startswith('dm-'):
+        return JsonResponse({'error': 'Cannot transfer admin in a DM room'}, status=400)
+
+    username = request.POST.get('username', '').strip()
+    if not username:
+        return JsonResponse({'error': 'Username is required'}, status=400)
+
+    User = get_user_model()
+    try:
+        new_admin = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return JsonResponse({'error': f'User "{username}" not found'}, status=404)
+
+    # Cannot transfer to self
+    if new_admin == request.user:
+        return JsonResponse({'error': 'Cannot transfer adminship to yourself'}, status=400)
+
+    # Must be a member
+    if not room.members.filter(id=new_admin.id).exists():
+        return JsonResponse({'error': f'{username} is not a member of this room'}, status=400)
+
+    old_admin = room.admin
+    room.admin = new_admin
+    room.save(update_fields=['admin', 'updated_at'])
+
+    # Log activity
+    RoomActivity.objects.create(
+        room=room,
+        user=request.user,
+        activity_type='admin_transfer',
+        description=f'Transferred admin rights from {old_admin.username} to {new_admin.username}',
+        target_user=new_admin
+    )
+
+    return JsonResponse({
+        'ok': True,
+        'message': f'Admin rights transferred to {new_admin.username}',
+        'new_admin': new_admin.username,
+    })
+
+
+@login_required
+def activity_log(request, room_slug):
+    """View room activity log."""
+    room = get_object_or_404(Room, slug=room_slug)
+
+    # Only members can view activity log
+    if room.is_private and not room.members.filter(id=request.user.id).exists():
+        raise Http404("Room not found")
+
+    # Only admin can view activity log for private rooms
+    if room.is_private and room.admin != request.user:
+        raise Http404("Access denied")
+
+    # Get activities with pagination
+    page = int(request.GET.get('page', 1))
+    per_page = 50
+    offset = (page - 1) * per_page
+
+    activities = room.activities.select_related('user', 'target_user').order_by('-created_at')[offset:offset + per_page]
+    
+    # Get counts for different activity types
+    activity_counts = room.activities.values('activity_type').annotate(count=Count('id'))
+    activity_counts_dict = {item['activity_type']: item['count'] for item in activity_counts}
+
+    total_activities = room.activities.count()
+    has_more = offset + per_page < total_activities
+
+    return render(request, 'chat/activity_log.html', {
+        'room': room,
+        'activities': activities,
+        'activity_counts': activity_counts_dict,
+        'current_page': page,
+        'has_more': has_more,
+        'total_activities': total_activities,
+        'is_admin': room.admin == request.user,
     })

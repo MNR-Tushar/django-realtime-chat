@@ -13,6 +13,8 @@ urlpatterns = [
     path('room/<slug:room_slug>/settings/', views.room_settings, name='room_settings'),
     path('room/<slug:room_slug>/remove-member/', views.remove_member, name='remove_member'),
     path('room/<slug:room_slug>/leave/', views.leave_group, name='leave_group'),
+    path('room/<slug:room_slug>/transfer-admin/', views.transfer_admin, name='transfer_admin'),
+    path('room/<slug:room_slug>/activity-log/', views.activity_log, name='activity_log'),
 
     # ── Message Pagination ──────────────────────────────────────────
     path('room/<slug:room_slug>/older-messages/', views.load_older_messages, name='load_older_messages'),

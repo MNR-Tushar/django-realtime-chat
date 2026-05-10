@@ -190,3 +190,54 @@ class EmojiReaction(models.Model):
 
     def __str__(self):
         return f'{self.from_user.username} reacted {self.emoji} to {self.to_user.username}'
+
+
+class RoomActivity(models.Model):
+    """Activity log for room events"""
+    ACTIVITY_TYPES = [
+        ('message', 'Message'),
+        ('join', 'Join'),
+        ('leave', 'Leave'),
+        ('admin_transfer', 'Admin Transfer'),
+        ('member_remove', 'Member Remove'),
+        ('room_create', 'Room Create'),
+        ('room_delete', 'Room Delete'),
+        ('invitation_sent', 'Invitation Sent'),
+        ('invitation_accept', 'Invitation Accept'),
+        ('invitation_decline', 'Invitation Decline'),
+        ('join_request', 'Join Request'),
+        ('join_approve', 'Join Approve'),
+        ('join_reject', 'Join Reject'),
+    ]
+
+    room = models.ForeignKey(
+        Room,
+        on_delete=models.CASCADE,
+        related_name='activities'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='room_activities'
+    )
+    activity_type = models.CharField(max_length=20, choices=ACTIVITY_TYPES)
+    description = models.TextField()
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='targeted_activities',
+        help_text="User who is the target of this activity (e.g., removed member, new admin)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['room', '-created_at']),
+            models.Index(fields=['activity_type', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.user.username} - {self.activity_type} in {self.room.name}'

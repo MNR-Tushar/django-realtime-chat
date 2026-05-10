@@ -1,0 +1,425 @@
+{% extends 'base.html' %}
+{% block title %}Activity Log — {{ room.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ══════════════════════════════════════════
+   ACTIVITY LOG PAGE
+══════════════════════════════════════════ */
+.activity-shell {
+  padding-top: 54px;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at 30% 0%, rgba(168,85,247,0.08) 0%, transparent 55%),
+              radial-gradient(ellipse at 80% 80%, rgba(44,165,224,0.06) 0%, transparent 55%),
+              var(--bg2);
+}
+
+.activity-wrap {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 20px 60px;
+}
+
+/* ── Header ── */
+.activity-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.activity-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.activity-title .room-icon {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #a855f7, #6b21a8);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.activity-stats {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.stat-badge {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.stat-badge strong {
+  color: var(--text);
+  margin-right: 4px;
+}
+
+/* ── Back link ── */
+.activity-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  margin-bottom: 24px;
+  transition: color 0.18s;
+}
+.activity-back:hover { color: var(--text); }
+.activity-back-arrow {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: background 0.18s;
+}
+.activity-back:hover .activity-back-arrow { background: var(--surface2); }
+
+/* ── Activity filters ── */
+.activity-filters {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.filter-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  margin-bottom: 16px;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.18s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-chip:hover {
+  background: var(--surface3);
+  color: var(--text);
+}
+
+.filter-chip.active {
+  background: linear-gradient(135deg, #a855f7, #6b21a8);
+  border-color: #a855f7;
+  color: #fff;
+}
+
+.filter-count {
+  background: rgba(255,255,255,0.2);
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* ── Activity list ── */
+.activity-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.activity-item {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  transition: background 0.15s;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-item:hover {
+  background: var(--surface2);
+}
+
+.activity-icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.icon-message { background: rgba(44,165,224,0.15); color: var(--primary); }
+.icon-join { background: rgba(77,205,110,0.15); color: var(--green); }
+.icon-leave { background: rgba(240,84,84,0.15); color: var(--red); }
+.icon-admin_transfer { background: rgba(168,85,247,0.15); color: #a855f7; }
+.icon-member_remove { background: rgba(240,84,84,0.15); color: var(--red); }
+.icon-room_create { background: rgba(77,205,110,0.15); color: var(--green); }
+.icon-room_delete { background: rgba(240,84,84,0.15); color: var(--red); }
+.icon-invitation { background: rgba(44,165,224,0.15); color: var(--primary); }
+.icon-join_request { background: rgba(255,193,7,0.15); color: var(--yellow); }
+
+.activity-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-header-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.activity-user {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.activity-type {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface2);
+  color: var(--muted);
+}
+
+.type-message { background: rgba(44,165,224,0.1); color: var(--primary); }
+.type-join { background: rgba(77,205,110,0.1); color: var(--green); }
+.type-leave { background: rgba(240,84,84,0.1); color: var(--red); }
+.type-admin_transfer { background: rgba(168,85,247,0.1); color: #a855f7; }
+.type-member_remove { background: rgba(240,84,84,0.1); color: var(--red); }
+.type-room_create { background: rgba(77,205,110,0.1); color: var(--green); }
+.type-room_delete { background: rgba(240,84,84,0.1); color: var(--red); }
+.type-invitation { background: rgba(44,165,224,0.1); color: var(--primary); }
+.type-join_request { background: rgba(255,193,7,0.1); color: var(--yellow); }
+
+.activity-time {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.activity-description {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.activity-target {
+  font-weight: 600;
+  color: var(--primary);
+}
+
+/* ── Empty state ── */
+.empty-activities {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.empty-text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Load more ── */
+.load-more {
+  text-align: center;
+  padding: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.load-more-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 24px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.18s;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.load-more-btn:hover {
+  background: var(--surface3);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .activity-wrap { padding: 24px 14px 48px; }
+  .activity-header { flex-direction: column; align-items: flex-start; }
+  .activity-stats { width: 100%; justify-content: space-between; }
+  .activity-item { padding: 12px 16px; }
+  .activity-header-info { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .activity-time { margin-left: 0; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="activity-shell">
+  <div class="activity-wrap">
+
+    {# ── Back ── #}
+    <a href="{% url 'chat:room_settings' room.slug %}" class="activity-back">
+      <span class="activity-back-arrow">←</span>
+      Back to Settings
+    </a>
+
+    {# ── Header ── #}
+    <div class="activity-header">
+      <div class="activity-title">
+        <div class="room-icon">
+          {% if room.avatar %}
+            <img src="{{ room.avatar.url }}" alt="{{ room.name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px;">
+          {% else %}
+            📋
+          {% endif %}
+        </div>
+        Activity Log
+      </div>
+      <div class="activity-stats">
+        <div class="stat-badge">
+          <strong>{{ total_activities }}</strong> activities
+        </div>
+      </div>
+    </div>
+
+    {# ── Activity Filters ── #}
+    {% if activity_counts %}
+    <div class="activity-filters">
+      <div class="filter-title">Filter by Type</div>
+      <div class="filter-chips">
+        <a href="?page=1" class="filter-chip {% if not request.GET.type %}active{% endif %}">
+          All
+          <span class="filter-count">{{ total_activities }}</span>
+        </a>
+        {% for activity_type, count in activity_counts.items %}
+          <a href="?type={{ activity_type }}&page=1" class="filter-chip">
+            {{ activity_type|title }}
+            <span class="filter-count">{{ count }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Activity List ── #}
+    <div class="activity-list">
+      {% if activities %}
+        {% for activity in activities %}
+          <div class="activity-item">
+            <div class="activity-icon icon-{{ activity.activity_type }}">
+              {% if activity.activity_type == 'message' %}💬
+              {% elif activity.activity_type == 'join' %}➕
+              {% elif activity.activity_type == 'leave' %}➖
+              {% elif activity.activity_type == 'admin_transfer' %}👑
+              {% elif activity.activity_type == 'member_remove' %}🚫
+              {% elif activity.activity_type == 'room_create' %}🏗️
+              {% elif activity.activity_type == 'room_delete' %}🗑️
+              {% elif activity.activity_type == 'invitation_sent' %}📧
+              {% elif activity.activity_type == 'invitation_accept' %}✅
+              {% elif activity.activity_type == 'invitation_decline' %}❌
+              {% elif activity.activity_type == 'join_request' %}📝
+              {% elif activity.activity_type == 'join_approve' %}✅
+              {% elif activity.activity_type == 'join_reject' %}❌
+              {% else %}📋
+              {% endif %}
+            </div>
+            <div class="activity-content">
+              <div class="activity-header-info">
+                <span class="activity-user">{{ activity.user.username }}</span>
+                <span class="activity-type type-{{ activity.activity_type }}">{{ activity.get_activity_type_display }}</span>
+                <span class="activity-time">{{ activity.created_at|date:"M d, Y H:i" }}</span>
+              </div>
+              <div class="activity-description">
+                {{ activity.description }}
+                {% if activity.target_user %}
+                  <span class="activity-target">@{{ activity.target_user.username }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-activities">
+          <div class="empty-icon">📋</div>
+          <div class="empty-title">No activities yet</div>
+          <div class="empty-text">Activities will appear here as users interact with the room.</div>
+        </div>
+      {% endif %}
+    </div>
+
+    {# ── Load More ── #}
+    {% if has_more %}
+      <div class="load-more">
+        <a href="?page={{ current_page|add:1 }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}" class="load-more-btn">
+          Load More Activities
+        </a>
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

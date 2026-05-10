@@ -2,7 +2,7 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from .models import Message, Room
+from .models import Message, Room, RoomActivity
 from django.utils import timezone
 from datetime import timedelta
 
@@ -25,6 +25,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
         await self.set_user_online(True)
+        
+        # Log activity for user joining room
+        await self.log_user_join()
 
         await self.channel_layer.group_send(
             self.room_group_name,
@@ -278,12 +281,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     reply_to = Message.objects.get(id=reply_to_id, room=room)
                 except Message.DoesNotExist:
                     pass
-            return Message.objects.create(
+            message = Message.objects.create(
                 room=room,
                 author=self.user,
                 content=content,
                 reply_to=reply_to,
             )
+            
+            # Log activity for message creation
+            RoomActivity.objects.create(
+                room=room,
+                user=self.user,
+                activity_type='message',
+                description=f'Sent message: "{content[:50]}{"..." if len(content) > 50 else ""}"'
+            )
+            
+            return message
         except Room.DoesNotExist:
             return None
 
@@ -339,6 +352,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return True
         except Message.DoesNotExist:
             return False
+
+    @database_sync_to_async
+    def log_user_join(self):
+        """Log user joining room activity"""
+        try:
+            room = Room.objects.get(slug=self.room_slug)
+            RoomActivity.objects.create(
+                room=room,
+                user=self.user,
+                activity_type='join',
+                description=f'Joined room "{room.name}"'
+            )
+        except Room.DoesNotExist:
+            pass
 
     @database_sync_to_async
     def toggle_reaction(self, message_id, emoji):
