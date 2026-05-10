@@ -38,10 +38,10 @@
 body.light-mode {
   --bg:           #eef2f7;
   --bg2:          #dde5ef;
-  --surface:      #ffffff;
-  --surface2:     #f0f4fa;
-  --surface3:     #e4ecf5;
-  --border:       #cfd8e8;
+  --surface:      #ffffff6e;
+  --surface2:     #f1f5f9;
+  --surface3:     #e2e8f0;
+  --border:       #959daa;
   --primary:      #2ca5e0;
   --primary-dark: #1a8fc0;
   --primary-glow: rgba(44,165,224,0.12);
