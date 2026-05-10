@@ -61,9 +61,9 @@
 
 .rooms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 .room-card {
-  background: #1c2733; border: 1px solid #2b3a4d; border-radius: 16px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
   padding: 18px 18px 14px; display: flex; flex-direction: column; gap: 10px;
-  text-decoration: none; color: #f0f4f8;
+  text-decoration: none; color: var(--text);
   transition: all 0.22s cubic-bezier(0.4,0,0.2,1); position: relative; overflow: hidden;
 }
 .room-card::before {
@@ -72,10 +72,10 @@
   opacity: 0; transition: opacity 0.22s;
   pointer-events: none;
 }
-.room-card:hover { border-color: #2ca5e0; transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.3); }
+.room-card:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: var(--shadow); }
 .room-card:hover::before { opacity: 1; }
 .room-card.private-group { border-color: rgba(168,85,247,0.3); }
-.room-card.private-group:hover { border-color: #a855f7; }
+.room-card.private-group:hover { border-color: var(--purple); }
 
 /* ── Discoverable (locked) room card ── */
 .room-card.locked-room {
@@ -402,20 +402,20 @@
 .room-slide {
   flex-shrink: 0;
   width: 200px;
-  background: linear-gradient(145deg, #1c2733 0%, #1a2330 100%);
-  border: 1px solid #2b3a4d;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 18px;
   padding: 16px;
   text-decoration: none;
-  color: #f0f4f8;
+  color: var(--text);
   transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
   scroll-snap-align: start;
   position: relative;
 }
 .room-slide:hover {
   transform: translateY(-4px);
-  border-color: #2ca5e0;
-  box-shadow: 0 12px 32px rgba(44,165,224,0.15);
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
 }
 .room-slide-header {
   display: flex;
@@ -542,18 +542,18 @@
   align-items: center;
   gap: 6px;
   padding: 12px 16px;
-  background: #1c2733;
-  border: 1px solid #2b3a4d;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   text-decoration: none;
-  color: #f0f4f8;
+  color: var(--text);
   transition: all 0.2s;
   min-width: 90px;
   scroll-snap-align: start;
 }
 .dm-slide:hover {
-  border-color: #2ca5e0;
-  background: #1a2a3a;
+  border-color: var(--primary);
+  background: var(--surface2);
 }
 .dm-slide.online {
   border-color: rgba(77,205,110,0.4);
@@ -1067,6 +1067,32 @@
 <script>
 const CSRF_TOKEN = "{{ csrf_token }}";
 
+// ── Theme Toggle for Index Page ─────────────────────────────────────
+const themeBtn = document.getElementById('themeBtn');
+
+// Load saved theme
+const savedTheme = localStorage.getItem('chat-theme') || 'dark';
+if (savedTheme === 'light') document.body.classList.add('light-mode');
+updateThemeBtn();
+
+function updateThemeBtn() {
+  if (themeBtn) {
+    const isLight = document.body.classList.contains('light-mode');
+    themeBtn.textContent = isLight ? '☀️' : '🌙';
+    themeBtn.title = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
+  }
+}
+
+if (themeBtn) {
+  themeBtn.addEventListener('click', () => {
+    document.body.classList.toggle('light-mode');
+    const theme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+    localStorage.setItem('chat-theme', theme);
+    updateThemeBtn();
+    showToast('Theme', theme === 'light' ? '☀️ Light mode on' : '🌙 Dark mode on');
+  });
+}
+
 // ── DM Slideshow (Auto Carousel) ──────────────────────────────────────
 let slideIndex = 0;
 let slideInterval;
@@ -1079,12 +1105,27 @@ function initSlideshow() {
   const slides = slideshow.querySelectorAll('.dm-slide');
   if (slides.length <= 5) return; // Don't auto-scroll if few users
 
+  // Enable mouse scroll for DMs
+  enableDMMouseScroll(slideshow);
+
   // Start auto-slideshow
   startSlideshow();
 
   // Pause on hover
   slideshow.addEventListener('mouseenter', stopSlideshow);
   slideshow.addEventListener('mouseleave', startSlideshow);
+
+  // Pause on manual interaction
+  const prevBtn = document.querySelector('.dm-slide-prev');
+  const nextBtn = document.querySelector('.dm-slide-next');
+  if (prevBtn) prevBtn.addEventListener('click', () => {
+    stopSlideshow();
+    setTimeout(startSlideshow, 5000); // Resume after 5 seconds
+  });
+  if (nextBtn) nextBtn.addEventListener('click', () => {
+    stopSlideshow();
+    setTimeout(startSlideshow, 5000); // Resume after 5 seconds
+  });
 }
 
 function startSlideshow() {
@@ -1117,8 +1158,69 @@ function moveSlide(direction) {
   });
 }
 
+function enableDMMouseScroll(slideshow) {
+  let isDown = false;
+  let startX;
+  let scrollLeft;
+
+  slideshow.addEventListener('mousedown', (e) => {
+    isDown = true;
+    slideshow.style.cursor = 'grabbing';
+    startX = e.pageX - slideshow.offsetLeft;
+    scrollLeft = slideshow.scrollLeft;
+    stopSlideshow(); // Stop auto-scroll on mouse interaction
+  });
+
+  slideshow.addEventListener('mouseleave', () => {
+    isDown = false;
+    slideshow.style.cursor = 'grab';
+  });
+
+  slideshow.addEventListener('mouseup', () => {
+    isDown = false;
+    slideshow.style.cursor = 'grab';
+    // Resume auto-scroll after 3 seconds of inactivity
+    setTimeout(() => {
+      if (!isDown && slideInterval) {
+        startSlideshow();
+      }
+    }, 3000);
+  });
+
+  slideshow.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - slideshow.offsetLeft;
+    const walk = (x - startX) * 2; // Scroll speed
+    slideshow.scrollLeft = scrollLeft - walk;
+  });
+
+  // Enable regular mouse wheel scrolling
+  slideshow.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY;
+    slideshow.scrollLeft += delta;
+    stopSlideshow(); // Stop auto-scroll on wheel interaction
+    
+    // Resume auto-scroll after 3 seconds
+    clearTimeout(slideshow.wheelTimeout);
+    slideshow.wheelTimeout = setTimeout(() => {
+      if (slideInterval) {
+        startSlideshow();
+      }
+    }, 3000);
+  });
+
+  // Set grab cursor
+  slideshow.style.cursor = 'grab';
+  console.log('DM mouse scroll enabled');
+}
+
 // ── Rooms Slideshow Navigation ─────────────────────────────────────────
 let roomsSlideIndex = 0;
+let roomsSlideInterval;
+let roomsSlideDelay = 4000; // 4 seconds for auto-scroll
+let isAutoScrolling = false;
 
 function moveRoomsSlide(direction) {
   const slideshow = document.getElementById('roomsSlideshow');
@@ -1128,10 +1230,8 @@ function moveRoomsSlide(direction) {
   if (slides.length === 0) return;
 
   roomsSlideIndex += direction;
-
-  // Loop around
-  if (roomsSlideIndex < 0) roomsSlideIndex = slides.length - 1;
-  if (roomsSlideIndex >= slides.length) roomsSlideIndex = 0;
+  if (roomsSlideIndex < 0) roomsSlideIndex = slides.length - 1; // Loop to end
+  if (roomsSlideIndex > slides.length - 1) roomsSlideIndex = 0; // Loop to start
 
   // Scroll to the slide
   const slideWidth = slides[0].offsetWidth + 16; // width + gap
@@ -1141,8 +1241,128 @@ function moveRoomsSlide(direction) {
   });
 }
 
+function initRoomsSlideshow() {
+  const slideshow = document.getElementById('roomsSlideshow');
+  if (!slideshow || slideshow.children.length === 0) return;
+
+  const slides = slideshow.querySelectorAll('.room-slide');
+  if (slides.length <= 3) return; // Don't auto-scroll if few rooms
+
+  // Enable mouse scroll
+  enableMouseScroll(slideshow);
+
+  // Start auto-scroll (right to left)
+  startRoomsAutoScroll();
+
+  // Pause on hover
+  slideshow.addEventListener('mouseenter', stopRoomsAutoScroll);
+  slideshow.addEventListener('mouseleave', startRoomsAutoScroll);
+
+  // Pause on manual interaction
+  const prevBtn = document.querySelector('.rooms-slide-prev');
+  const nextBtn = document.querySelector('.rooms-slide-next');
+  if (prevBtn) prevBtn.addEventListener('click', () => {
+    stopRoomsAutoScroll();
+    setTimeout(startRoomsAutoScroll, 5000); // Resume after 5 seconds
+  });
+  if (nextBtn) nextBtn.addEventListener('click', () => {
+    stopRoomsAutoScroll();
+    setTimeout(startRoomsAutoScroll, 5000); // Resume after 5 seconds
+  });
+}
+
+function startRoomsAutoScroll() {
+  stopRoomsAutoScroll();
+  isAutoScrolling = true;
+  roomsSlideInterval = setInterval(() => {
+    moveRoomsSlide(1); // Auto-scroll right to left (next slide)
+  }, roomsSlideDelay);
+  console.log('Auto-scroll started for rooms slideshow');
+}
+
+function stopRoomsAutoScroll() {
+  isAutoScrolling = false;
+  if (roomsSlideInterval) {
+    clearInterval(roomsSlideInterval);
+    roomsSlideInterval = null;
+  }
+  console.log('Auto-scroll stopped for rooms slideshow');
+}
+
+function enableMouseScroll(slideshow) {
+  let isDown = false;
+  let startX;
+  let scrollLeft;
+
+  slideshow.addEventListener('mousedown', (e) => {
+    isDown = true;
+    slideshow.style.cursor = 'grabbing';
+    startX = e.pageX - slideshow.offsetLeft;
+    scrollLeft = slideshow.scrollLeft;
+    stopRoomsAutoScroll(); // Stop auto-scroll on mouse interaction
+  });
+
+  slideshow.addEventListener('mouseleave', () => {
+    isDown = false;
+    slideshow.style.cursor = 'grab';
+  });
+
+  slideshow.addEventListener('mouseup', () => {
+    isDown = false;
+    slideshow.style.cursor = 'grab';
+    // Resume auto-scroll after 3 seconds of inactivity
+    setTimeout(() => {
+      if (!isDown && !isAutoScrolling) {
+        startRoomsAutoScroll();
+      }
+    }, 3000);
+  });
+
+  slideshow.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - slideshow.offsetLeft;
+    const walk = (x - startX) * 2; // Scroll speed
+    slideshow.scrollLeft = scrollLeft - walk;
+  });
+
+  // Enable regular mouse wheel scrolling
+  slideshow.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY;
+    slideshow.scrollLeft += delta;
+    stopRoomsAutoScroll(); // Stop auto-scroll on wheel interaction
+    
+    // Resume auto-scroll after 3 seconds
+    clearTimeout(slideshow.wheelTimeout);
+    slideshow.wheelTimeout = setTimeout(() => {
+      if (!isAutoScrolling) {
+        startRoomsAutoScroll();
+      }
+    }, 3000);
+  });
+
+  // Set grab cursor
+  slideshow.style.cursor = 'grab';
+}
+
+// Ensure auto-scroll stays active - periodic check
+setInterval(() => {
+  const slideshow = document.getElementById('roomsSlideshow');
+  if (slideshow && !isAutoScrolling) {
+    const slides = slideshow.querySelectorAll('.room-slide');
+    if (slides.length > 3) {
+      console.log('Restarting auto-scroll for rooms slideshow');
+      startRoomsAutoScroll();
+    }
+  }
+}, 10000); // Check every 10 seconds
+
 // Initialize on load
-document.addEventListener('DOMContentLoaded', initSlideshow);
+document.addEventListener('DOMContentLoaded', () => {
+  initSlideshow();
+  initRoomsSlideshow();
+});
 
 // ── Toggle Show More ──────────────────────────────────────────────────
 function toggleSection(gridId, btn) {

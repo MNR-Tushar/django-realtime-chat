@@ -18,7 +18,6 @@ const toastContainer = document.getElementById('toastContainer');
 const attachBtn      = document.getElementById('attachBtn');
 const emojiBtn       = document.getElementById('emojiBtn');
 const uploadProg     = document.getElementById('uploadProgress');
-const themeBtn       = document.getElementById('themeBtn');
 const soundBtn       = document.getElementById('soundBtn');
 const usersSidebarEl = document.getElementById('usersSidebar');
 const usersBtn       = document.getElementById('usersBtn');
@@ -262,28 +261,6 @@ function prependMessage({ content, username, timestamp, messageId, fileUrl, file
   lastAuthor = username;
 }
 
-// ── Theme ─────────────────────────────────────
-const savedTheme = localStorage.getItem('chat-theme') || 'dark';
-if (savedTheme === 'light') document.body.classList.add('light-mode');
-updateThemeBtn();
-
-function updateThemeBtn() {
-  if (themeBtn) {
-    const isLight = document.body.classList.contains('light-mode');
-    themeBtn.textContent = isLight ? '☀️' : '🌙';
-    themeBtn.title = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
-  }
-}
-
-if (themeBtn) {
-  themeBtn.addEventListener('click', () => {
-    document.body.classList.toggle('light-mode');
-    const theme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
-    localStorage.setItem('chat-theme', theme);
-    updateThemeBtn();
-    showToast('Theme', theme === 'light' ? '☀️ Light mode on' : '🌙 Dark mode on');
-  });
-}
 
 // ── Sound ─────────────────────────────────────
 function createBeep(type = 'receive') {

@@ -17,6 +17,7 @@
     NexaChat
   </div>
   <div class="nav-links">
+    <button id="themeBtn" class="icon-btn theme-toggle" title="Toggle Theme">🌙</button>
     {% if user.is_authenticated %}
       <a href="{% url 'profile' %}" class="nav-user" style="text-decoration:none;cursor:pointer;" title="My Profile">
         {% if user.avatar %}
