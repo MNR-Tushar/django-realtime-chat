@@ -242,6 +242,7 @@ function prependMessage({ content, username, timestamp, messageId, fileUrl, file
       ${own ? '<span class="read-badge">✓</span>' : ''}
       <span class="msg-actions">
         ${replyAction}
+        ${forwardAction}
         ${ownActions}
       </span>
     </div>
@@ -1108,6 +1109,7 @@ function appendMessage({ content, username, timestamp, messageId, fileUrl, fileT
       ${own ? '<span class="read-badge">✓</span>' : ''}
       <span class="msg-actions">
         ${replyAction}
+        ${forwardAction}
         ${ownActions}
       </span>
     </div>
