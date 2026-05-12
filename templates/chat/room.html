@@ -279,7 +279,7 @@
       {% endfor %}
       {% endif %}
 
-     
+     <div class="section-lbl" style="margin-top:6px">Private Rooms</div>
       {% for r in my_private_rooms %}
         <a href="{% url 'chat:room' r.slug %}" class="room-item {% if r.slug == room.slug %}active{% endif %}" data-room-name="{% if r.slug|slice:':3' == 'dm-' %}{% for member in r.members.all %}{% if member != request.user %}{{ member.username }}{% endif %}{% endfor %}{% else %}{{ r.name }}{% endif %}">
           <div class="room-avatar">
