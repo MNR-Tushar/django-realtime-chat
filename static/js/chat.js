@@ -219,6 +219,10 @@ function prependMessage({ content, username, timestamp, messageId, fileUrl, file
       onclick="startReply('${messageId}', '${escapeHtml(username)}', this)"
       title="Reply">↩</button>`;
 
+  const forwardAction = `<button class="msg-action-btn forward-btn"
+      onclick="openForwardModal('${messageId}', '${escapeHtml(content)}', '${escapeHtml(username)}')"
+      title="Forward message">📤</button>`;
+
   const ownActions = own ? `
     ${!fileUrl ? `<button class="msg-action-btn edit-btn"
         onclick="startEdit('${messageId}')" title="Edit">✏️</button>` : ''}
@@ -1080,6 +1084,10 @@ function appendMessage({ content, username, timestamp, messageId, fileUrl, fileT
   const replyAction = `<button class="msg-action-btn reply-btn"
       onclick="startReply('${messageId}', '${escapeHtml(username)}', this)"
       title="Reply">↩</button>`;
+
+  const forwardAction = `<button class="msg-action-btn forward-btn"
+      onclick="openForwardModal('${messageId}', '${escapeHtml(content)}', '${escapeHtml(username)}')"
+      title="Forward message">📤</button>`;
 
   const ownActions = own ? `
     ${!fileUrl ? `<button class="msg-action-btn edit-btn"

@@ -181,6 +181,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
             }
         )
 
+        # ── Forward message ───────────────────────────────
+        if event_type == 'forward_message':
+            target_room_slug = data.get('target_room_slug')
+            message_id = data.get('message_id')
+            if target_room_slug and message_id:
+                result = await self.forward_message(message_id, target_room_slug)
+                if result:
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type':       'message_forwarded',
+                            'message_id': message_id,
+                            'target_room': target_room_slug,
+                            'username':   self.user.username,
+                        }
+                    )
+            return
+
     # ── Handlers ──────────────────────────────
 
     async def chat_message(self, event):
@@ -405,3 +423,47 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return reactions_data
         except (Room.DoesNotExist, Message.DoesNotExist):
             return None
+
+    @database_sync_to_async
+    def forward_message(self, message_id, target_room_slug):
+        """Forward a message to another room"""
+        from .models import RoomActivity
+        try:
+            # Get the original message
+            original_message = Message.objects.get(id=message_id)
+
+            # Get the target room
+            target_room = Room.objects.get(slug=target_room_slug)
+
+            # Check if user is member of target room
+            if not target_room.members.filter(id=self.user.id).exists():
+                return None
+
+            # Create forwarded message in target room
+            forwarded_content = f"Forwarded from {original_message.room.name}:\n{original_message.content}"
+            new_message = Message.objects.create(
+                room=target_room,
+                author=self.user,
+                content=forwarded_content,
+            )
+
+            # Log activity in target room
+            RoomActivity.objects.create(
+                room=target_room,
+                user=self.user,
+                activity_type='message',
+                description=f'Forwarded message from {original_message.room.name}'
+            )
+
+            return new_message
+        except (Message.DoesNotExist, Room.DoesNotExist):
+            return None
+
+    async def message_forwarded(self, event):
+        """Handle message forwarded confirmation"""
+        await self.send(text_data=json.dumps({
+            'type':           'message_forwarded',
+            'message_id':     event['message_id'],
+            'target_room':    event['target_room'],
+            'username':       event['username'],
+        }))
